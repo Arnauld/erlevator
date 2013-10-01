@@ -1,1 +1,1 @@
-web: erl -pa ebin deps/*/ebin -noshell -noinput -s erlblog
+web: erl -pa ebin deps/*/ebin -noshell -noinput -s erlevator
