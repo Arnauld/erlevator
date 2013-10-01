@@ -9,5 +9,5 @@
                   cowboy
                  ]},
   {mod, { erlevator_app, []}},
-  {env, [{http_port, 5001}]}
+  {env, [{http_port, 8080}]}
  ]}.
