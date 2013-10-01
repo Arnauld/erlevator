@@ -5,8 +5,9 @@
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+                  cowboy
                  ]},
   {mod, { erlevator_app, []}},
-  {env, []}
+  {env, [{http_port, 5001}]}
  ]}.
