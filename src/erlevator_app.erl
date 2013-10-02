@@ -17,7 +17,9 @@ start(_StartType, _StartArgs) ->
     Port      = port(),
     TransOpts = [{port, Port}],
     ProtoOpts = [{env, [{dispatch, Dispatch}]}],
-    {ok, _}   = cowboy:start_http(http, ?C_ACCEPTORS, TransOpts, ProtoOpts),
+    HttpStart = cowboy:start_http(http, ?C_ACCEPTORS, TransOpts, ProtoOpts),
+    io:format("cowboy:start_http: ~p~n", [HttpStart]),
+    {ok, _}   = HttpStart,
     erlevator_sup:start_link().
 
 stop(_State) ->
