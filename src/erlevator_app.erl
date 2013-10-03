@@ -18,7 +18,7 @@ start(_StartType, _StartArgs) ->
     TransOpts = [{port, Port}],
     ProtoOpts = [{env, [{dispatch, Dispatch}]}],
     HttpStart = cowboy:start_http(http, ?C_ACCEPTORS, TransOpts, ProtoOpts),
-    io:format("cowboy:start_http: ~p~n", [HttpStart]),
+    io:format("cowboy:start_http (on port ~p): ~p~n", [Port, HttpStart]),
     {ok, _}   = HttpStart,
     erlevator_sup:start_link().
 
@@ -41,5 +41,5 @@ port() ->
             {ok, Port} = application:get_env(http_port),
             Port;
         Other ->
-            Other
+            list_to_integer(Other)
     end.
