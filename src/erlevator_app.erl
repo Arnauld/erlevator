@@ -31,10 +31,20 @@ stop(_State) ->
 routes() ->
     [
      {'_', [
-            {"/", erlevator_handler, []}
+            {"/nextCommand", erlevator_handler, [next_command]},
+            %% Events
+            {"/call", erlevator_handler, [call]},
+            {"/go",   erlevator_handler, [go]},
+            {"/userHasEntered",   erlevator_handler, [user_entered]},
+            {"/userHasExited",   erlevator_handler, [user_exited]},
+            {"/reset", erlevator_handler, [reset]}
            ]}
     ].
 
+%%
+%% Retrieve the PORT either from an os environment variable
+%% e.g. in Heroku environment, or from the application conf.
+%%
 port() ->
     case os:getenv("PORT") of
         false ->

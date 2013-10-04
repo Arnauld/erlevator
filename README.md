@@ -1,4 +1,16 @@
-#
+# Get Started
+
+Compile the application using rebar:
+
+    ./rebar get-deps compile
+
+Start the application:
+
+    erl -pa ebin deps/*/ebin -s erlevator
+
+Execute tests:
+
+    ./rebar compile eunit
 
 # Links
 
