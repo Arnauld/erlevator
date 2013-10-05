@@ -2,4 +2,5 @@
                 floor_max,
                 floor_min,
                 direction,
-                state}).
+                state,
+                algo}).

@@ -3,7 +3,7 @@
 % Shared record definiation
 -include("erlevator.hrl").
 
--export([start/1, loop/1]).
+-export([start/1, start/2, loop/1]).
 -export([next_command/0]).
 -export([event/2]).
 
@@ -12,28 +12,15 @@
 %% ===================================================================
 
 start(NbFloor) ->
-  Pid = spawn(erlevator_ia, loop, [new(NbFloor)]),
+  start(NbFloor, omnibus).
+
+start(NbFloor, Algo) ->
+  Elevator = new_elevator(NbFloor, Algo),
+  Pid = spawn(erlevator_ia, loop, [Elevator]),
   register(erlevator_ia, Pid).
 
-loop(State) ->
-  receive
-    {event, reset, [Cause]} ->
-      % io:format("erlevator_ia#loop(reset):{} ~p ~n", [Cause]),
-      NewState = new(State#state.floor_max),
-      loop(NewState);
-
-    {event, EventType, Details} ->
-      % io:format("erlevator_ia#loop(event): ~p, ~p, state: ~p~n", [EventType, Details, State]),
-      loop(State);
-
-    {next_command, From} ->
-      NewState = next_command(State),
-      % io:format("erlevator_ia#loop(next_command): ~p~n", [NewState]),
-      From ! { NewState#state.state },
-      loop(NewState);
-    stop ->
-      true
-  end.
+stop() ->
+  whereis(erlevator_ia) ! stop.
 
 event(EventType, Details) ->
   whereis(erlevator_ia) ! { event, EventType, Details }.
@@ -47,6 +34,35 @@ next_command() ->
   end.
 
 
+loop(Elevator) ->
+  receive
+    {event, reset, [Cause]} ->
+      % io:format("erlevator_ia#loop(reset):{} ~p ~n", [Cause]),
+      NewElevator = new_elevator(Elevator#state.floor_max,
+                                 Elevator#state.algo),
+      loop(NewElevator);
+
+    {event, EventType, Details} ->
+      % io:format("erlevator_ia#loop(event): ~p, ~p, state: ~p~n", [EventType, Details, Elevator]),
+      loop(Elevator);
+
+    {next_command, From} ->
+      NewElevator = next_command(Elevator),
+      % io:format("erlevator_ia#loop(next_command): ~p~n", [NewElevator]),
+      From ! { NewElevator#state.state },
+      loop(NewElevator);
+
+    %%
+    {algo, Algo} ->
+      NewElevator = Elevator#state{algo = Algo},
+      loop(NewElevator);
+
+    stop ->
+      true
+  end.
+
+
+
 %% ===================================================================
 %% Internal functions
 %% ===================================================================
@@ -54,50 +70,54 @@ next_command() ->
 %%
 %
 %%
-new(NbFloor) -> #state{floor = 0,
-                       floor_min = 0,
-                       floor_max = NbFloor,
-                       direction = +1,
-                       state = closed}.
+new_elevator(NbFloor, Algo) ->
+  #state{floor = 0,
+         floor_min = 0,
+         floor_max = NbFloor,
+         direction = +1,
+         state = closed,
+         algo  = Algo}.
 
 %%
 %
 %%
-next_command(State = #state{state = Prev}) ->
-  NewState = case Prev of
+next_command(Elevator = #state{state = Prev}) ->
+  NewElevator = case Prev of
                opened ->
-                 State#state{state = closed};
+                 Elevator#state{state = closed};
                closed ->
-                 move(State);
+                 move(Elevator);
                nothing ->
-                 State;
+                 Elevator;
                up ->
-                 State#state{state = opened};
+                 Elevator#state{state = opened};
                down ->
-                 State#state{state = opened}
+                 Elevator#state{state = opened}
              end,
-  % io:format("erlevator_ia#next_command/1 : ~p -> ~p ~n", [Prev, NewState]),
-  NewState.
+  % io:format("erlevator_ia#next_command/1 : ~p -> ~p ~n", [Prev, NewElevator]),
+  NewElevator.
 
 
 
 %%
 %
 %%
-move(State = #state{floor = Floor,
-                    floor_min = FloorMin,
-                    floor_max = FloorMax,
-                    direction = Dir}) ->
+move(Elevator = #state{floor = Floor,
+                       floor_min = FloorMin,
+                       floor_max = FloorMax,
+                       direction = Dir,
+                       algo      = Algo}) when Algo == omnibus ->
+
   NextFloor = Floor + Dir,
   if
     (NextFloor > FloorMax) or (NextFloor < FloorMin) ->
       NewDir = -Dir,
       AdjustedFloor = Floor + NewDir,
-      NewState = state_for_direction(NewDir),
-      State#state{floor=AdjustedFloor, direction=NewDir, state=NewState};
+      NewElevator = state_for_direction(NewDir),
+      Elevator#state{floor=AdjustedFloor, direction=NewDir, state=NewElevator};
     true -> % aka else
-      NewState = state_for_direction(Dir),
-      State#state{floor=NextFloor, state=NewState}
+      NewElevator = state_for_direction(Dir),
+      Elevator#state{floor=NextFloor, state=NewElevator}
   end.
 
 %%
@@ -117,18 +137,18 @@ state_for_direction(Dir) ->
 -include_lib("eunit/include/eunit.hrl").
 
 new_test() ->
-	IA = new(5),
-	Expected = #state{
-                    floor=0,
+	IA = new_elevator(5, beuark),
+	Expected = #state{floor=0,
                     floor_min = 0,
                     floor_max = 5,
                     direction = +1,
-                    state = closed},
+                    state = closed,
+                    algo  = beuark},
 	?assertEqual(Expected, IA),
 	ok.
 
 elevator_should_change_direction_when_hitting_roof_test() ->
-  IA  = new(5),
+  IA  = new_elevator(5, omnibus),
   IA1 = #state{floor=Floor1} = move(IA), % 1st floor?
   ?assertEqual(1, Floor1),
   IA2 = #state{floor=Floor2} = move(IA1), % 2st floor?
