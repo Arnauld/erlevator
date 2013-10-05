@@ -7,11 +7,13 @@
 
 -define(C_ACCEPTORS,  100).
 
+
 %% ===================================================================
 %% Application callbacks
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+    IAStart   = erlevator_ia:start(5),
     Routes    = routes(),
     Dispatch  = cowboy_router:compile(Routes),
     Port      = port(),
@@ -28,16 +30,18 @@ stop(_State) ->
 %% ===================================================================
 %% Internal functions
 %% ===================================================================
+
+%%
+%% Cowboy routes mapping -
+%% route does not support HTTP Method constraint
+%%   https://groups.google.com/forum/#!topic/erlang-programming/-v2sBGxhDMY
+%%
+%% To prevent path duplication, dispatching is done in the handler
+%%
 routes() ->
     [
      {'_', [
-            {"/nextCommand", erlevator_handler, [next_command]},
-            %% Events
-            {"/call", erlevator_handler, [call]},
-            {"/go",   erlevator_handler, [go]},
-            {"/userHasEntered",   erlevator_handler, [user_entered]},
-            {"/userHasExited",   erlevator_handler, [user_exited]},
-            {"/reset", erlevator_handler, [reset]}
+            {"/[...]", erlevator_handler, []}
            ]}
     ].
 

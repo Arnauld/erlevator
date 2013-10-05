@@ -3,6 +3,54 @@
 % Shared record definiation
 -include("erlevator.hrl").
 
+-export([start/1, loop/1]).
+-export([next_command/0]).
+-export([event/2]).
+
+%% ===================================================================
+%% Exposed API
+%% ===================================================================
+
+start(NbFloor) ->
+  Pid = spawn(erlevator_ia, loop, [new(NbFloor)]),
+  register(erlevator_ia, Pid).
+
+loop(State) ->
+  receive
+    {event, reset, [Cause]} ->
+      % io:format("erlevator_ia#loop(reset):{} ~p ~n", [Cause]),
+      NewState = new(State#state.floor_max),
+      loop(NewState);
+
+    {event, EventType, Details} ->
+      % io:format("erlevator_ia#loop(event): ~p, ~p, state: ~p~n", [EventType, Details, State]),
+      loop(State);
+
+    {next_command, From} ->
+      NewState = next_command(State),
+      % io:format("erlevator_ia#loop(next_command): ~p~n", [NewState]),
+      From ! { NewState#state.state },
+      loop(NewState);
+    stop ->
+      true
+  end.
+
+event(EventType, Details) ->
+  whereis(erlevator_ia) ! { event, EventType, Details }.
+
+next_command() ->
+  whereis(erlevator_ia) ! { next_command, self() },
+  receive
+    {Command} ->
+      % io:format("erlevator_ia#next_command: ~p~n", [Command]),
+      Command
+  end.
+
+
+%% ===================================================================
+%% Internal functions
+%% ===================================================================
+
 %%
 %
 %%
@@ -10,22 +58,26 @@ new(NbFloor) -> #state{floor = 0,
                        floor_min = 0,
                        floor_max = NbFloor,
                        direction = +1,
-                       state = nothing}.
+                       state = closed}.
 
 %%
 %
 %%
 next_command(State = #state{state = Prev}) ->
-  case Prev of
-    opened ->
-      State#state{state = closed};
-    closed ->
-      move(State);
-    nothing ->
-      State;
-    _ ->
-      State#state{state = open}
-  end.
+  NewState = case Prev of
+               opened ->
+                 State#state{state = closed};
+               closed ->
+                 move(State);
+               nothing ->
+                 State;
+               up ->
+                 State#state{state = opened};
+               down ->
+                 State#state{state = opened}
+             end,
+  % io:format("erlevator_ia#next_command/1 : ~p -> ~p ~n", [Prev, NewState]),
+  NewState.
 
 
 
@@ -41,20 +93,26 @@ move(State = #state{floor = Floor,
     (NextFloor > FloorMax) or (NextFloor < FloorMin) ->
       NewDir = -Dir,
       AdjustedFloor = Floor + NewDir,
-      NewState = if
-                   NewDir > 0 -> up;
-                   true -> down
-                 end,
+      NewState = state_related_to_direction(NewDir),
       State#state{floor=AdjustedFloor, direction=NewDir, state=NewState};
     true -> % aka else
-      State#state{floor=NextFloor}
+      NewState = state_for_direction(Dir),
+      State#state{floor=NextFloor, state=NewState}
   end.
 
 %%
-%
-% Tests
-%
 %%
+%%
+state_for_direction(Dir) ->
+  if
+    Dir > 0 -> up;
+    true -> down
+  end.
+
+%% ===================================================================
+%% Tests
+%% ===================================================================
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
@@ -65,7 +123,7 @@ new_test() ->
                     floor_min = 0,
                     floor_max = 5,
                     direction = +1,
-                    state = nothing},
+                    state = closed},
 	?assertEqual(Expected, IA),
 	ok.
 
@@ -83,5 +141,39 @@ elevator_should_change_direction_when_hitting_roof_test() ->
   ?assertEqual(5, Floor5),
   IA6 = #state{floor=Floor6} = move(IA5), % 4st floor?
   ?assertEqual(4, Floor6).
+
+elevator_should_be_an_omnibus_test() ->
+  start(5),
+  ?assertEqual(up,     next_command()),
+  ?assertEqual(opened, next_command()), % 1st floor
+  ?assertEqual(closed, next_command()),
+  ?assertEqual(up,     next_command()),
+  ?assertEqual(opened, next_command()), % 2nd floor
+  ?assertEqual(closed, next_command()),
+  ?assertEqual(up,     next_command()),
+  ?assertEqual(opened, next_command()), % 3rd floor
+  ?assertEqual(closed, next_command()),
+  ?assertEqual(up,     next_command()),
+  ?assertEqual(opened, next_command()), % 4th floor
+  ?assertEqual(closed, next_command()),
+  ?assertEqual(up,     next_command()),
+  ?assertEqual(opened, next_command()), % 5th floor
+  ?assertEqual(closed, next_command()),
+  ?assertEqual(down,   next_command()),
+  ?assertEqual(opened, next_command()), % 4th floor
+  ?assertEqual(closed, next_command()),
+  ?assertEqual(down,   next_command()),
+  ?assertEqual(opened, next_command()), % 3rd floor
+  ?assertEqual(closed, next_command()),
+  ?assertEqual(down,   next_command()),
+  ?assertEqual(opened, next_command()), % 2nd floor
+  ?assertEqual(closed, next_command()),
+  ?assertEqual(down,   next_command()),
+  ?assertEqual(opened, next_command()), % 1st floor
+  ?assertEqual(closed, next_command()),
+  ?assertEqual(down,   next_command()),
+  ?assertEqual(opened, next_command()), % 0st floor
+  ?assertEqual(closed, next_command()),
+  ?assertEqual(up,     next_command()).
 
 -endif.

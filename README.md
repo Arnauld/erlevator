@@ -10,7 +10,7 @@ Start the application:
 
 Execute tests:
 
-    ./rebar compile eunit
+    ./rebar compile eunit skip_deps=true
 
 # Links
 
