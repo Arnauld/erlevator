@@ -93,7 +93,7 @@ move(State = #state{floor = Floor,
     (NextFloor > FloorMax) or (NextFloor < FloorMin) ->
       NewDir = -Dir,
       AdjustedFloor = Floor + NewDir,
-      NewState = state_related_to_direction(NewDir),
+      NewState = state_for_direction(NewDir),
       State#state{floor=AdjustedFloor, direction=NewDir, state=NewState};
     true -> % aka else
       NewState = state_for_direction(Dir),

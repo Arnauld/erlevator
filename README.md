@@ -12,6 +12,22 @@ Execute tests:
 
     ./rebar compile eunit skip_deps=true
 
+
+# Heroku
+
+Deploy on Heroku
+
+    git push heroku master
+
+
+Check logs
+
+    heroku logs
+
+Remote bash
+
+    heroku run bash
+
 # Links
 
 * [cowboy](https://github.com/extend/cowboy): Small, fast, modular HTTP server written in Erlang
