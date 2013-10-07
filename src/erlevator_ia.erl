@@ -7,6 +7,7 @@
 -export([next_command/0]).
 -export([event/2]).
 
+
 %% ===================================================================
 %% Exposed API
 %% ===================================================================
@@ -110,7 +111,7 @@ new_event() -> #floor_event{idle = 0,
                             what = undefined}.
 
 %%
-%%
+%% Event handle
 %%
 event(Elevator, call, [AtFloor, Direction]) ->
   FloorEvents = Elevator#state.floor_events,
@@ -153,7 +154,7 @@ event(Elevator, user_exited, []) ->
   Elevator.
 
 %%
-%%
+%% Reset the Event for the specified Floor
 %%
 reset_event(Floor, FloorEvents) ->
     array:set(Floor, new_event(), FloorEvents).
@@ -503,21 +504,16 @@ optimized_should_move_to_the_called_floor_but_not_stop_when_called_on_the_opposi
     event(call, [2, down]),
     ?assertEqual(up,      next_command()), % 1st
     event(call, [1, down]),
-%    dump_events(state()),
     ?assertEqual(up,      next_command()), % 2nd
     ?assertEqual(opened,  next_command()),
     event(go, [0]),
-%    dump_events(state()),
     ?assertEqual(closed,  next_command()),
-    ?assertEqual(down,    next_command()), %1st
-%    State = state(),
-%    io:format("::: ~p ~n", [State#state.floor]),
-%    dump_events(State),
+    ?assertEqual(down,    next_command()), % 1st
     ?assertEqual(opened,  next_command()),
     ?assertEqual(closed,  next_command()),
-    ?assertEqual(down,    next_command()), %ground
+    ?assertEqual(down,    next_command()), % ground
     ?assertEqual(opened,  next_command()),
-    ?assertEqual(nothing, next_command()),
+    ?assertEqual(nothing, next_command()), % idle 3 times
     ok
   after
     stop()
