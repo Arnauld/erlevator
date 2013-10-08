@@ -3,4 +3,8 @@
                 floor_min,
                 direction,
                 state,
-                algo}).
+                state_to_use,
+                algo,
+                floor_events}).
+
+-record(floor_event, {what, idle}).

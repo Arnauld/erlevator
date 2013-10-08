@@ -36,7 +36,7 @@ stop(_State) ->
 %% route does not support HTTP Method constraint
 %%   https://groups.google.com/forum/#!topic/erlang-programming/-v2sBGxhDMY
 %%
-%% To prevent path duplication, dispatching is done in the handler
+%% To prevent path duplication, dispatching is done in the handler itself
 %%
 routes() ->
     [
