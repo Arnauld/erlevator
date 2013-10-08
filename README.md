@@ -12,6 +12,10 @@ Execute tests:
 
     ./rebar compile eunit skip_deps=true
 
+Execute tests for dependencies too:
+
+    ./rebar compile eunit
+
 
 # Heroku
 
