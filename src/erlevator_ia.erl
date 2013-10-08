@@ -261,9 +261,11 @@ next_command(Elevator = #state{floor     = Floor,
       end;
 
     (Prev == closed) or (Prev == up) or (Prev == down) ->
+
       Result = next_floor(Floor, Min, Max, Dir, FloorEvents, result()),
       ShouldOpen = should_open_door(Floor, Dir, FloorEvents, Result),
-      io:format("... [floor:~p] ~p, should open: ~p ~n", [Floor, Result, ShouldOpen]),
+
+      % io:format("... [floor:~p] ~p, should open: ~p ~n", [Floor, Result, ShouldOpen]),
       if
          ShouldOpen ->
             Elevator#state{state = opened,
@@ -340,7 +342,6 @@ should_open_door(Floor, Dir, Events, #result{destination  = Destination,
           false
       end
  end.
-
 
 
 next_floor(Floor, Min, Max, Dir, Events, Result) ->

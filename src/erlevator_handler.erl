@@ -8,11 +8,17 @@
 %% Handler callbacks
 %% ===================================================================
 
+%%
+%% @doc init/3 handler callback
+%%
 init(_Transport, Req, Opts) ->
     % Opts is defined "as is" for the State value
     % in the handle/2 method
     {ok, Req, Opts}.
 
+%%
+%% @doc handle/2 handler callback
+%%
 handle(Req, []) ->
   {Method, Req1} = cowboy_req:method(Req),
   {Path,   Req2} = cowboy_req:path(Req1),
@@ -22,6 +28,9 @@ handle(Req, []) ->
   {ok, Req0, undefined}.
 
 
+%%
+%% @doc terminate/3 handler callback
+%%
 terminate(_Reason, _Req, _State) ->
     ok.
 
@@ -30,7 +39,7 @@ terminate(_Reason, _Req, _State) ->
 %% ===================================================================
 
 %%
-%% nextCommand
+%% @doc nextCommand
 %%
 handle0(<<"GET">>, <<"/nextCommand">>, Req2) ->
   NewCmd = erlevator_ia:next_command(),
@@ -38,7 +47,7 @@ handle0(<<"GET">>, <<"/nextCommand">>, Req2) ->
   cowboy_req:reply(200, [], Body, Req2);
 
 %%
-%% reset event
+%% @doc reset event
 %%
 handle0(<<"GET">>, <<"/reset">>, Req2) ->
   {Cause, Req3} = cowboy_req:qs_val(<<"cause">>, Req2),
@@ -46,7 +55,7 @@ handle0(<<"GET">>, <<"/reset">>, Req2) ->
   cowboy_req:reply(200, Req3);
 
 %%
-%% call event
+%% @doc call event
 %%
 handle0(<<"GET">>, <<"/call">>, Req2) ->
   {AtFloor,   Req3} = cowboy_req:qs_val(<<"atFloor">>, Req2),
@@ -66,7 +75,7 @@ handle0(<<"GET">>, <<"/call">>, Req2) ->
   end;
 
 %%
-%% go event
+%% @doc go event
 %%
 handle0(<<"GET">>, <<"/go">>, Req2) ->
   {Destination, Req3} = cowboy_req:qs_val(<<"floorToGo">>, Req2),
@@ -81,27 +90,27 @@ handle0(<<"GET">>, <<"/go">>, Req2) ->
   end;
 
 %%
-%% user entered event
+%% @doc user entered event
 %%
 handle0(<<"GET">>, <<"/userHasEntered">>, Req2) ->
   erlevator_ia:event(user_entered, []),
   cowboy_req:reply(200, Req2);
 
 %%
-%% user exited event
+%% @doc user exited event
 %%
 handle0(<<"GET">>, <<"/userHasExited">>, Req2) ->
   erlevator_ia:event(user_exited, []),
   cowboy_req:reply(200, Req2);
 
 %%
-%% All Other GET cases
+%% @doc All Other GET cases returns a 404 HTTP response
 %%
 handle0(<<"GET">>, _, Req2) ->
   cowboy_req:reply(404, Req2);
 
 %%
-%% Any other Method cases
+%% @doc Any other Method cases a 405 HTTP response
 %%
 handle0(_, _, Req2) ->
   %% Method not allowed.
@@ -111,6 +120,10 @@ handle0(_, _, Req2) ->
 %% Internal functions
 %% ===================================================================
 
+%%
+%% @doc convert an atom to the expected string.
+%%     e.g. 'up' to '<<"UP">>'
+%%
 command_to_body(up)      -> <<"UP">>;
 command_to_body(down)    -> <<"DOWN">>;
 command_to_body(opened)  -> <<"OPEN">>;
