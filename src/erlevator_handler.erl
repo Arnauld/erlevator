@@ -40,6 +40,7 @@ terminate(_Reason, _Req, _State) ->
 
 %%
 %% @doc nextCommand
+%% @private
 %%
 handle0(<<"GET">>, <<"/nextCommand">>, Req2) ->
   NewCmd = erlevator_ia:next_command(),
@@ -48,6 +49,7 @@ handle0(<<"GET">>, <<"/nextCommand">>, Req2) ->
 
 %%
 %% @doc reset event
+%% @private
 %%
 handle0(<<"GET">>, <<"/reset">>, Req2) ->
   {Cause, Req3} = cowboy_req:qs_val(<<"cause">>, Req2),
@@ -56,6 +58,7 @@ handle0(<<"GET">>, <<"/reset">>, Req2) ->
 
 %%
 %% @doc call event
+%% @private
 %%
 handle0(<<"GET">>, <<"/call">>, Req2) ->
   {AtFloor,   Req3} = cowboy_req:qs_val(<<"atFloor">>, Req2),
@@ -76,6 +79,7 @@ handle0(<<"GET">>, <<"/call">>, Req2) ->
 
 %%
 %% @doc go event
+%% @private
 %%
 handle0(<<"GET">>, <<"/go">>, Req2) ->
   {Destination, Req3} = cowboy_req:qs_val(<<"floorToGo">>, Req2),
@@ -91,6 +95,7 @@ handle0(<<"GET">>, <<"/go">>, Req2) ->
 
 %%
 %% @doc user entered event
+%% @private
 %%
 handle0(<<"GET">>, <<"/userHasEntered">>, Req2) ->
   erlevator_ia:event(user_entered, []),
@@ -98,6 +103,7 @@ handle0(<<"GET">>, <<"/userHasEntered">>, Req2) ->
 
 %%
 %% @doc user exited event
+%% @private
 %%
 handle0(<<"GET">>, <<"/userHasExited">>, Req2) ->
   erlevator_ia:event(user_exited, []),
@@ -105,12 +111,14 @@ handle0(<<"GET">>, <<"/userHasExited">>, Req2) ->
 
 %%
 %% @doc All Other GET cases returns a 404 HTTP response
+%% @private
 %%
 handle0(<<"GET">>, _, Req2) ->
   cowboy_req:reply(404, Req2);
 
 %%
 %% @doc Any other Method cases a 405 HTTP response
+%% @private
 %%
 handle0(_, _, Req2) ->
   %% Method not allowed.
@@ -123,6 +131,7 @@ handle0(_, _, Req2) ->
 %%
 %% @doc convert an atom to the expected string.
 %%     e.g. 'up' to '<<"UP">>'
+%% @private
 %%
 command_to_body(up)      -> <<"UP">>;
 command_to_body(down)    -> <<"DOWN">>;
@@ -140,6 +149,9 @@ command_to_body(nothing) -> <<"NOTHING">>.
 
 command_to_body_test() ->
   ?assertEqual(<<"UP">>, command_to_body(up)),
+  ?assertEqual(<<"DOWN">>, command_to_body(down)),
+  ?assertEqual(<<"OPEN">>, command_to_body(opened)),
+  ?assertEqual(<<"CLOSE">>, command_to_body(closed)),
   ?assertEqual(<<"NOTHING">>, command_to_body(nothing)).
 
 -endif.

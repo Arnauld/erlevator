@@ -12,21 +12,49 @@
 %% Exposed API
 %% ===================================================================
 
+%%
+%% @doc start an elevator with <code>NbFloor</code> floors and based
+%%      on the <code>optimized</code> algorithm.
+%% @see erlevator:start/2
+%%
+
+-spec(start(integer()) -> pid()).
+
 start(NbFloor) ->
   start(NbFloor, optimized).
+
+%%
+%% @doc start an elevator with <code>NbFloor</code> floors and based
+%%      on the <code>Algo</code> algorithm. Once started the
+%%      corresponding <code>pid</code> is registered with the
+%%      <code>erlevator_ia</code> key.
+%%
+
+-spec(start(integer(), (optimized|omnibus)) -> pid()).
 
 start(NbFloor, Algo) ->
   Elevator = new_elevator(NbFloor, Algo),
   Pid = spawn(erlevator_ia, loop, [Elevator]),
   register(erlevator_ia, Pid).
 
+%%
+%% @doc stop the registered elevator.
+%%
+
 stop() ->
   whereis(erlevator_ia) ! stop.
 
+%%
+%% @doc notify the registered elevator.
+%%
 event(EventType, Details) ->
   io:format("erlevator_ia#event: (~p, ~p)~n", [EventType, Details]),
   whereis(erlevator_ia) ! { event, EventType, Details }.
 
+%%
+%% @doc compute and returns the next command from the registered elevator.
+%%
+%%
 next_command() ->
   whereis(erlevator_ia) ! { next_command, self() },
   receive
@@ -35,6 +63,9 @@ next_command() ->
       Command
   end.
 
+%%
+%% @doc query the current state of the registered elevator.
+%%
 state() ->
   whereis(erlevator_ia) ! { state, self() },
   receive
@@ -43,7 +74,8 @@ state() ->
   end.
 
 %%
-%% Process loop that maintains the Elevator's State
+%% @doc Process loop that maintains the Elevator's State.
+%% @private
 %%
 loop(Elevator) ->
   receive
@@ -90,6 +122,12 @@ loop(Elevator) ->
 %% ===================================================================
 
 %%
+%% @doc create a new Elevator. It is used to store the current state of
+%% an Elevator, but does not start any process.
+%%
+%% @private
+%% @see erlevator:start/1
+%% @see erlevator:start/2
 %%
 %%
 new_elevator(NbFloor, Algo) ->
@@ -105,13 +143,15 @@ new_elevator(NbFloor, Algo) ->
                                    {default, new_event()}])}.
 
 %%
-%%
+%% @doc create a new event to hold a floor state.
+%% @private
 %%
 new_event() -> #floor_event{idle = 0,
                             what = undefined}.
 
 %%
-%% Event handle
+%% @doc Event handle
+%% @private
 %%
 event(Elevator, call, [AtFloor, Direction]) ->
   FloorEvents = Elevator#state.floor_events,
