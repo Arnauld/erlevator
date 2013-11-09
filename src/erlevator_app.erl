@@ -13,7 +13,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    IAStart   = erlevator_ia:start(19),
+    IAStart   = erlevator_ia:start(?C_FLOORS),
     Routes    = routes(),
     Dispatch  = cowboy_router:compile(Routes),
     Port      = port(),
