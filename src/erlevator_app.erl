@@ -6,14 +6,14 @@
 -export([start/2, stop/1]).
 
 -define(C_ACCEPTORS,  100).
-
+-define(C_FLOORS,      19).
 
 %% ===================================================================
 %% Application callbacks
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    IAStart   = erlevator_ia:start(5),
+    IAStart   = erlevator_ia:start(19),
     Routes    = routes(),
     Dispatch  = cowboy_router:compile(Routes),
     Port      = port(),
