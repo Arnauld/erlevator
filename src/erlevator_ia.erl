@@ -45,6 +45,14 @@ stop() ->
   whereis(erlevator_ia) ! stop.
 
 %%
+%% @doc stop the registered elevator.
+%%
+
+debug() ->
+  whereis(erlevator_ia) ! debug.
+
+
+%%
 %% @doc notify the registered elevator.
 %%
 event(EventType, Details) ->
@@ -111,6 +119,11 @@ loop(Elevator) ->
       NewElevator = Elevator#state{algo = Algo},
       loop(NewElevator);
 
+    debug ->
+      Debug = Elevator#state.debug,
+      NewElevator = Elevator#state{debug = not Debug},
+      loop(NewElevator);
+
     stop ->
       true
   end.
@@ -140,7 +153,8 @@ new_elevator(NbFloor, Algo) ->
          algo      = Algo,
          floor_events = array:new([{size,    NbFloor + 1},
                                    {fixed,   true},
-                                   {default, new_event()}])}.
+                                   {default, new_event()}]),
+         debug     = false}.
 
 %%
 %% @doc create a new event to hold a floor state.
@@ -283,7 +297,8 @@ next_command(Elevator = #state{floor     = Floor,
                                state     = Prev,
                                direction = Dir,
                                algo      = Algo,
-                               floor_events = FloorEvents}) when Algo == optimized ->
+                               floor_events = FloorEvents,
+                               debug     = Debug}) when Algo == optimized ->
   if
     (Prev == opened) ->
       FloorEvent = array:get(Floor, FloorEvents),
@@ -303,7 +318,7 @@ next_command(Elevator = #state{floor     = Floor,
     (Prev == closed) or (Prev == up) or (Prev == down) ->
 
       Result = next_floor(Floor, Min, Max, Dir, FloorEvents, result()),
-      ShouldOpen = should_open_door(Floor, Dir, FloorEvents, Result),
+      ShouldOpen = should_open_door(Debug, Floor, Dir, FloorEvents, Result),
 
       % io:format("... [floor:~p] ~p, should open: ~p ~n", [Floor, Result, ShouldOpen]),
       if
@@ -324,6 +339,7 @@ next_command(Elevator = #state{floor     = Floor,
                  false ->
                    AdjustedFloor = Floor - Dir,
                    Elevator#state{state = state_for_direction(-Dir),
+                                  direction = -Dir,
                                   state_to_use = undefined,
                                   floor = AdjustedFloor}
                end;
@@ -345,43 +361,61 @@ move(Elevator = #state{floor = Floor,
                        floor_min = FloorMin,
                        floor_max = FloorMax,
                        direction = Dir,
-                       algo      = Algo}) when Algo == omnibus ->
+                       algo      = Algo,
+                       debug     = Debug}) when Algo == omnibus ->
   NextFloor = Floor + Dir,
-  if
-    (NextFloor > FloorMax) or (NextFloor < FloorMin) ->
-      NewDir = -Dir,
-      AdjustedFloor = Floor + NewDir,
-      NewElevator = state_for_direction(NewDir),
-      Elevator#state{floor=AdjustedFloor, direction=NewDir, state=NewElevator};
+  NewState  = if
+                (NextFloor > FloorMax) or (NextFloor < FloorMin) ->
+                  NewDir = -Dir,
+                  AdjustedFloor = Floor + NewDir,
+                  NewElevator = state_for_direction(NewDir),
+                  Elevator#state{floor=AdjustedFloor, direction=NewDir, state=NewElevator};
 
-    true -> % aka else
-      NewElevator = state_for_direction(Dir),
-      Elevator#state{floor=NextFloor, state=NewElevator}
-  end.
+                true -> % aka else
+                  NewElevator = state_for_direction(Dir),
+                  Elevator#state{floor=NextFloor, state=NewElevator}
+              end,
+  case Debug of
+    true ->
+      io:format("move Floor: ~p, Dir:~p -> NewState: ~p ~n", [Floor, Dir, NewState]);
+    _ ->
+       ok
+  end,
+  NewState.
 
 %% ===================================================================
 %% Optimized
 %% ===================================================================
 
-should_open_door(Floor, Dir, Events, #result{destination  = Destination,
+should_open_door(Debug, Floor, Dir, Events, #result{destination  = Destination,
                                              pass_through = PassThrough}) ->
-  if
-    (Destination == undefined) and (PassThrough == Floor) ->
-      true;
 
-    true -> % aka else
 
-      Event = array:get(Floor, Events),
-      What  = Event#floor_event.what,
-      StateForDir = state_for_direction(Dir),
-      if
-        (What == stop) or (What == StateForDir) ->
-          true;
+  Res = if
+          (Destination == undefined) and (PassThrough == Floor) ->
+            true;
 
-        true -> % aka else
-          false
-      end
- end.
+          true -> % aka else
+
+            Event = array:get(Floor, Events),
+            What  = Event#floor_event.what,
+            StateForDir = state_for_direction(Dir),
+            if
+              (What == stop) or (What == StateForDir) ->
+                true;
+
+              true -> % aka else
+                false
+            end
+        end,
+  case Debug of
+    true ->
+      io:format("should_open_door Floor: ~p, Dir:~p, Dst: ~p, Passthrough: ~p ==> ~p ~n", [Floor, Dir, Destination, PassThrough, Res]);
+    _ ->
+       ok
+  end,
+  Res.
+
 
 
 next_floor(Floor, Min, Max, Dir, Events, Result) ->
@@ -440,7 +474,8 @@ new_elevator_test() ->
                     direction = +1,
                     state = closed,
                     algo  = beuark,
-                    floor_events = undefined},
+                    floor_events = undefined,
+                    debug = false},
 	?assertEqual(Expected, IA1),
 	ok.
 
@@ -555,6 +590,34 @@ optimized_should_move_to_the_called_floor_but_not_stop_when_called_on_the_opposi
     ?assertEqual(down,    next_command()), % ground
     ?assertEqual(opened,  next_command()),
     ?assertEqual(nothing, next_command()), % idle 3 times
+    ok
+  after
+    stop()
+  end.
+
+
+optimized_should_move_to_the_called_floor_but_not_stop_when_called_on_the_opposite_way_2_test() ->
+  try
+    start(5, optimized),
+    debug(),
+    event(call, [5, down]),
+    ?assertEqual(up,      next_command()), % 1st
+    ?assertEqual(up,      next_command()), % 2nd
+    ?assertEqual(up,      next_command()), % 3rd
+    ?assertEqual(up,      next_command()), % 4th
+    ?assertEqual(up,      next_command()), % 5th
+    ?assertEqual(opened,  next_command()),
+    ?assertEqual(closed,  next_command()),
+    ?assertEqual(nothing, next_command()), % idle
+    event(call, [3, up]),
+    event(call, [2, up]),
+    ?assertEqual(down,    next_command()), % 4th
+    ?assertEqual(down,    next_command()), % 3rd
+    ?assertEqual(down,    next_command()), % 2nd
+    ?assertEqual(opened,  next_command()),
+    ?assertEqual(closed,  next_command()),
+    ?assertEqual(up,      next_command()), % 3th
+    ?assertEqual(opened,  next_command()),
     ok
   after
     stop()

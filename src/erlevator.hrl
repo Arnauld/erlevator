@@ -8,7 +8,8 @@
                 state         :: status(),
                 state_to_use  :: extended_status(),
                 algo          :: term(),
-                floor_events}).
+                floor_events,
+                debug         :: boolean()}).
 
 -record(floor_event, {what,
                       idle    :: (undefined | integer())}).
