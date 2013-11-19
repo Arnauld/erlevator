@@ -41,7 +41,6 @@ Remote bash
     http://elevator.retour1024.eu.cloudbees.net
 
 
-
 # Links
 
 * [cowboy](https://github.com/extend/cowboy): Small, fast, modular HTTP server written in Erlang
