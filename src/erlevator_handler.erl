@@ -44,7 +44,7 @@ terminate(_Reason, _Req, _State) ->
 %%
 handle0(<<"GET">>, <<"/status">>, Req2) ->
   State = erlevator_ia:state(),
-  Body = command_to_body(NewCmd),
+  Body  = io:format("~p", [State]),
   cowboy_req:reply(200, [], Body, Req2);
 
 
