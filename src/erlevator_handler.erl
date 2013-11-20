@@ -42,6 +42,16 @@ terminate(_Reason, _Req, _State) ->
 %% @doc nextCommand
 %% @private
 %%
+handle0(<<"GET">>, <<"/status">>, Req2) ->
+  State = erlevator_ia:state(),
+  Body = command_to_body(NewCmd),
+  cowboy_req:reply(200, [], Body, Req2);
+
+
+%%
+%% @doc nextCommand
+%% @private
+%%
 handle0(<<"GET">>, <<"/nextCommand">>, Req2) ->
   NewCmd = erlevator_ia:next_command(),
   Body = command_to_body(NewCmd),
@@ -53,8 +63,8 @@ handle0(<<"GET">>, <<"/nextCommand">>, Req2) ->
 %%
 handle0(<<"GET">>, <<"/reset">>, Req2) ->
   {Cause,        Req3} = cowboy_req:qs_val(<<"cause">>, Req2),
-  {LowerFloor ,  Req4} = cowboy_req:qs_val(<<"lowerFloor">>, Req3),
-  {HigherFloor , Req5} = cowboy_req:qs_val(<<"higherFloor">>, Req4),
+  {LowerFloor ,  Req4} = cowboy_req:qs_val(<<"lowerFloor">>, Req3, 0),
+  {HigherFloor , Req5} = cowboy_req:qs_val(<<"higherFloor">>, Req4, 5),
   erlevator_ia:event(reset, [Cause, LowerFloor, HigherFloor]),
   cowboy_req:reply(200, Req5);
 
