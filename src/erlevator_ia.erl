@@ -87,11 +87,13 @@ state() ->
 %%
 loop(Elevator) ->
   receive
-    {event, reset, [Cause]} ->
+    {event, reset, [Cause, LowerFloor, HigherFloor]} ->
       % io:format("erlevator_ia#loop(reset):{} ~p ~n", [Cause]),
-      NewElevator = new_elevator(Elevator#state.floor_max,
-                                 Elevator#state.algo),
-      loop(NewElevator);
+      NewElevator0 = new_elevator(Elevator#state.floor_max,
+                                  Elevator#state.algo),
+      NewElevator1 = NewElevator0#state{floor_min=LowerFloor,
+                                        floor_max=HigherFloor},
+      loop(NewElevator1);
 
     {event, EventType, Details} ->
       % io:format("erlevator_ia#loop(event): ~p, ~p, state: ~p~n", [EventType, Details, Elevator]),

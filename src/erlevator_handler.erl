@@ -52,9 +52,11 @@ handle0(<<"GET">>, <<"/nextCommand">>, Req2) ->
 %% @private
 %%
 handle0(<<"GET">>, <<"/reset">>, Req2) ->
-  {Cause, Req3} = cowboy_req:qs_val(<<"cause">>, Req2),
-  erlevator_ia:event(reset, [Cause]),
-  cowboy_req:reply(200, Req3);
+  {Cause,        Req3} = cowboy_req:qs_val(<<"cause">>, Req2),
+  {LowerFloor ,  Req4} = cowboy_req:qs_val(<<"lowerFloor">>, Req3),
+  {HigherFloor , Req5} = cowboy_req:qs_val(<<"higherFloor">>, Req4),
+  erlevator_ia:event(reset, [Cause, LowerFloor, HigherFloor]),
+  cowboy_req:reply(200, Req5);
 
 %%
 %% @doc call event
