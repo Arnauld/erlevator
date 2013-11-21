@@ -33,7 +33,7 @@ start(NbFloor) ->
 -spec(start(integer(), (optimized|omnibus)) -> pid()).
 
 start(NbFloor, Algo) ->
-  Elevator = new_elevator(NbFloor, Algo),
+  Elevator = new_elevator(0, NbFloor, Algo),
   Pid = spawn(erlevator_ia, loop, [Elevator]),
   io:format("erlevator_ia#start: Pid: ~p~n", [Pid]),
   register(erlevator_ia, Pid).
@@ -91,11 +91,10 @@ loop(Elevator) ->
   receive
     {event, reset, [Cause, LowerFloor, HigherFloor]} ->
       % io:format("erlevator_ia#loop(reset):{} ~p ~n", [Cause]),
-      NewElevator0 = new_elevator(Elevator#state.floor_max,
-                                  Elevator#state.algo),
-      NewElevator1 = NewElevator0#state{floor_min=LowerFloor,
-                                        floor_max=HigherFloor},
-      loop(NewElevator1);
+      NewElevator = new_elevator(LowerFloor,
+                                 HigherFloor,
+                                 Elevator#state.algo),
+      loop(NewElevator);
 
     {event, EventType, Details} ->
       % io:format("erlevator_ia#loop(event): ~p, ~p, state: ~p~n", [EventType, Details, Elevator]),
@@ -147,15 +146,16 @@ loop(Elevator) ->
 %% @see erlevator:start/2
 %%
 %%
-new_elevator(NbFloor, Algo) ->
+new_elevator(FloorMin, FloorMax, Algo) ->
+  NbFloor = abs(FloorMax - FloorMin) + 1,
   #state{floor     = 0,
-         floor_min = 0,
-         floor_max = NbFloor,
+         floor_min = FloorMin,
+         floor_max = FloorMax,
          direction = +1,
          state     = closed,
          state_to_use = undefined,
          algo      = Algo,
-         floor_events = array:new([{size,    NbFloor + 1},
+         floor_events = array:new([{size,    NbFloor},
                                    {fixed,   true},
                                    {default, new_event()}]),
          debug     = false}.
@@ -470,7 +470,7 @@ dump_events0(Floor, Max, Events) ->
 -include_lib("eunit/include/eunit.hrl").
 
 new_elevator_test() ->
-	IA0 = new_elevator(5, beuark),
+	IA0 = new_elevator(0, 5, beuark),
   IA1 = IA0#state{floor_events = undefined}, %
 	Expected = #state{floor=0,
                     floor_min = 0,
@@ -484,7 +484,7 @@ new_elevator_test() ->
 	ok.
 
 omnibus_should_change_direction_when_hitting_roof_test() ->
-  IA  = new_elevator(5, omnibus),
+  IA  = new_elevator(0, 5, omnibus),
   IA1 = #state{floor=Floor1} = move(IA), % 1st floor?
   ?assertEqual(1, Floor1),
   IA2 = #state{floor=Floor2} = move(IA1), % 2st floor?
