@@ -56,8 +56,9 @@ debug() ->
 %% @doc notify the registered elevator.
 %%
 event(EventType, Details) ->
-  io:format("erlevator_ia#event: (~p, ~p)~n", [EventType, Details]),
-  whereis(erlevator_ia) ! { event, EventType, Details }.
+  Pid = whereis(erlevator_ia),
+  io:format("erlevator_ia#event: (~p, ~p) // Pid: ~p~n", [EventType, Details, Pid]),
+  Pid ! { event, EventType, Details }.
 
 %%
 %% @doc compute and returns the next command from the registered elevator.
