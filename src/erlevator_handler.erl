@@ -60,6 +60,8 @@ handle0(<<"GET">>, <<"/status">>, Req2) ->
   #state{floor        = Floor,
          floor_max    = FloorMax,
          floor_min    = FloorMin,
+         capacity     = Capacity,
+         nb_users     = NbUsers,
          direction    = Direction,
          state        = State,
          state_to_use = StateToUse,
@@ -67,10 +69,12 @@ handle0(<<"GET">>, <<"/status">>, Req2) ->
          floor_events = Events} = erlevator_ia:state(),
   Body  = io_lib:format("{\"floor\": ~w, \"floor_min\":~w, \"floor_max\":~w, "
                         "\"direction\": \"~w\", "
+                        "\"nb_users\": ~w, \"capacity\": ~w, "
                         "\"state\": \"~w\", "
                         "\"state-to_use\": \"~w\", "
                         "\"algo\" :\"~w\", \"events\":[~s]}", [Floor, FloorMin, FloorMax,
                                                       Direction,
+                                                      NbUsers, Capacity,
                                                       State, StateToUse,
                                                       Algo, join_events(Events)]),
   cowboy_req:reply(200, [{<<"content-type">>, <<"text/plain">>},
