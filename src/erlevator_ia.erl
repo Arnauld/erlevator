@@ -175,8 +175,9 @@ new_event() -> #floor_event{idle = 0,
 %% @private
 %%
 event(Elevator, call, [AtFloor, Direction]) ->
+  FloorMin = Elevator#state.floor_min,
   FloorEvents = Elevator#state.floor_events,
-  FloorEvent  = array:get(AtFloor, FloorEvents),
+  FloorEvent  = array:get(AtFloor - FloorMin, FloorEvents),
   case FloorEvent#floor_event.what of
     stop -> % whatever the direction one already stops there :)
       Elevator;
@@ -196,8 +197,9 @@ event(Elevator, call, [AtFloor, Direction]) ->
   end;
 
 event(Elevator, go, [Destination]) ->
+  FloorMin = Elevator#state.floor_min,
   FloorEvents = Elevator#state.floor_events,
-  FloorEvent  = array:get(Destination, FloorEvents),
+  FloorEvent  = array:get(Destination - FloorMin, FloorEvents),
   case FloorEvent#floor_event.what of
     stop -> % whatever the direction one already stops there :)
       Elevator;
@@ -223,8 +225,8 @@ reset_event(Floor, FloorEvents) ->
 %%
 %%
 %%
-increment_idle(Floor, FloorEvents) ->
-    Event = array:get(Floor, FloorEvents),
+increment_idle(Floor, FloorMin, FloorEvents) ->
+    Event = array:get(Floor - FloorMin, FloorEvents),
     Idle  = Event#floor_event.idle,
     array:set(Floor, Event#floor_event{idle = Idle + 1}, FloorEvents).
 
@@ -262,18 +264,19 @@ is_result_empty(#result{pass_through = PassThrough,
 %% ===================================================================
 
 next_command(Elevator = #state{floor = Floor,
+                               floor_min = FloorMin,
                                state = Prev,
                                algo  = Algo,
                                floor_events = FloorEvents}) when Algo == omnibus ->
   case Prev of
     opened ->
-      FloorEvent = array:get(Floor, FloorEvents),
+      FloorEvent = array:get(Floor - FloorMin, FloorEvents),
       Idle = FloorEvent#floor_event.idle,
       if
         (Floor == 0) and (Idle < 3) ->
            Elevator#state{state = opened,
                           state_to_use = nothing,
-                          floor_events = increment_idle(Floor, FloorEvents)};
+                          floor_events = increment_idle(Floor, FloorMin, FloorEvents)};
 
         true -> % aka else
            Elevator#state{state = closed,
@@ -307,13 +310,13 @@ next_command(Elevator = #state{floor     = Floor,
                                floor_events = FloorEvents}) when Algo == optimized ->
   if
     (Prev == opened) ->
-      FloorEvent = array:get(Floor, FloorEvents),
+      FloorEvent = array:get(Floor - Min, FloorEvents),
       Idle = FloorEvent#floor_event.idle,
       if
         (Floor == 0) and (Idle < 3) ->
            Elevator#state{state = opened,
                           state_to_use = nothing,
-                          floor_events = increment_idle(Floor, FloorEvents)};
+                          floor_events = increment_idle(Floor, Min, FloorEvents)};
 
         true -> % aka else
            Elevator#state{state = closed,
@@ -394,6 +397,7 @@ move(Elevator = #state{floor = Floor,
 %% ===================================================================
 
 should_open_door(#state{floor     = Floor,
+                        floor_min = FloorMin,
                         capacity  = Capacity,
                         nb_users  = NbUsers,
                         direction = Dir,
@@ -403,7 +407,7 @@ should_open_door(#state{floor     = Floor,
                          pass_through = PassThrough}) ->
 
 
-  Event = array:get(Floor, Events),
+  Event = array:get(Floor - FloorMin, Events),
   What   = Event#floor_event.what,
   StateForDir = state_for_direction(Dir),
   Res = if
@@ -438,7 +442,7 @@ next_floor(Floor, Min, Max, Dir, Events, Result) ->
       Result;
 
     true -> % aka else
-      Event = array:get(Floor, Events),
+      Event = array:get(Floor - Min, Events),
       What  = Event#floor_event.what,
       StateForDir = state_for_direction(Dir),
       case What of
@@ -462,14 +466,15 @@ next_floor(Floor, Min, Max, Dir, Events, Result) ->
 %% ===================================================================
 -ifdef(DUMP).
 
-dump_events(#state{floor_max = Max,
+dump_events(#state{floor_min = Min,
+                   floor_max = Max,
                    floor_events = Events}) ->
   io:format("FloorEvents: ["),
-  dump_events0(0, Max, Events).
+  dump_events0(0, Min, Max, Events).
 
-dump_events0(Floor, Max, _     ) when (Floor > Max) -> io:format("]~n");
-dump_events0(Floor, Max, Events) ->
-  #floor_event{what = What} = array:get(Floor, Events),
+dump_events0(Floor,   _, Max, _     ) when (Floor > Max) -> io:format("]~n");
+dump_events0(Floor, Min, Max, Events) ->
+  #floor_event{what = What} = array:get(Floor - Min, Events),
   io:format("[~p] ~p, ", [Floor, What]),
   dump_events0(Floor + 1, Max, Events).
 
