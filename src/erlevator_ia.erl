@@ -35,6 +35,7 @@ start(NbFloor) ->
 start(NbFloor, Algo) ->
   Elevator = new_elevator(NbFloor, Algo),
   Pid = spawn(erlevator_ia, loop, [Elevator]),
+  io:format("erlevator_ia#start: Pid: ~p~n", [Pid]),
   register(erlevator_ia, Pid).
 
 %%

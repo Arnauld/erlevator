@@ -27,7 +27,7 @@ handle(Req, []) ->
   {Path,   Req2} = cowboy_req:path(Req1),
   % io:format("Method: ~p // ~p  ~n", [Method, Path]),
   {ok, Req0} = handle0(Method, Path, Req2),
-  io:format("Elevator: ~p ~n", [erlevator_ia:state()]),
+  % io:format("Elevator: ~p ~n", [erlevator_ia:state()]),
   {ok, Req0, undefined}.
 
 
