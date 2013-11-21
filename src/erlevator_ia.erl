@@ -187,12 +187,12 @@ event(Elevator, call, [AtFloor, Direction]) ->
 
     undefined -> %
       NewEvent    = FloorEvent#floor_event{what=Direction},
-      NewEvents   = array:set(AtFloor, NewEvent, FloorEvents),
+      NewEvents   = array:set(AtFloor - FloorMin, NewEvent, FloorEvents),
       Elevator#state{floor_events = NewEvents};
 
     _ -> % the other direction is already tracked
       NewEvent    = FloorEvent#floor_event{what=stop},
-      NewEvents   = array:set(AtFloor, NewEvent, FloorEvents),
+      NewEvents   = array:set(AtFloor - FloorMin, NewEvent, FloorEvents),
       Elevator#state{floor_events = NewEvents}
   end;
 
@@ -206,7 +206,7 @@ event(Elevator, go, [Destination]) ->
 
     _ -> % stop there :)
       NewEvent    = FloorEvent#floor_event{what=stop},
-      NewEvents   = array:set(Destination, NewEvent, FloorEvents),
+      NewEvents   = array:set(Destination - FloorMin, NewEvent, FloorEvents),
       Elevator#state{floor_events = NewEvents}
   end;
 
@@ -219,8 +219,8 @@ event(Elevator, user_exited, []) ->
 %%
 %% Reset the Event for the specified Floor
 %%
-reset_event(Floor, FloorEvents) ->
-    array:set(Floor, new_event(), FloorEvents).
+reset_event(Floor, FloorMin, FloorEvents) ->
+    array:set(Floor - FloorMin, new_event(), FloorEvents).
 
 %%
 %%
@@ -281,7 +281,7 @@ next_command(Elevator = #state{floor = Floor,
         true -> % aka else
            Elevator#state{state = closed,
                           state_to_use = undefined,
-                          floor_events = reset_event(Floor, FloorEvents)}
+                          floor_events = reset_event(Floor, FloorMin, FloorEvents)}
       end;
 
     closed ->
@@ -321,7 +321,7 @@ next_command(Elevator = #state{floor     = Floor,
         true -> % aka else
            Elevator#state{state = closed,
                           state_to_use = undefined,
-                          floor_events = reset_event(Floor, FloorEvents)}
+                          floor_events = reset_event(Floor, Min, FloorEvents)}
       end;
 
     (Prev == closed) or (Prev == up) or (Prev == down) ->
@@ -334,7 +334,7 @@ next_command(Elevator = #state{floor     = Floor,
          ShouldOpen ->
             Elevator#state{state = opened,
                            state_to_use = undefined,
-                           floor_events = reset_event(Floor, FloorEvents)};
+                           floor_events = reset_event(Floor, Min, FloorEvents)};
 
          true -> % aka else
            case is_result_empty(Result) of
@@ -663,6 +663,34 @@ reset_test() ->
     ?assertEqual(Min, FloorMin),
     ?assertEqual(Max, FloorMax),
     ?assertEqual(Cap, Capacity),
+    ok
+  after
+    stop()
+  end.
+
+negative_floors_test() ->
+  try
+    Min = -13,
+    Max = 27,
+    Cap = 45,
+    start(5, optimized),
+    event(reset, [<<"Ooops">>, Min, Max, Cap]),
+    debug(),
+    event(call, [-7, down]),
+    ?assertEqual(up,      next_command()), % -12
+    ?assertEqual(up,      next_command()), % -11
+    ?assertEqual(up,      next_command()), % -10
+    ?assertEqual(up,      next_command()), % -9
+    ?assertEqual(up,      next_command()), % -8
+    ?assertEqual(up,      next_command()), % -7
+    ?assertEqual(opened,  next_command()),
+    ?assertEqual(closed,  next_command()),
+    ?assertEqual(nothing, next_command()), % idle
+    event(go, [-5]),
+    ?assertEqual(up,      next_command()), % -6
+    ?assertEqual(up,      next_command()), % -5
+    ?assertEqual(opened,  next_command()),
+    ?assertEqual(closed,  next_command()),
     ok
   after
     stop()
