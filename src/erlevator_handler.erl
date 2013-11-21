@@ -92,10 +92,24 @@ handle0(<<"GET">>, <<"/nextCommand">>, Req2) ->
 %%
 handle0(<<"GET">>, <<"/reset">>, Req2) ->
   {Cause,        Req3} = cowboy_req:qs_val(<<"cause">>, Req2),
-  {LowerFloor ,  Req4} = cowboy_req:qs_val(<<"lowerFloor">>, Req3, 0),
-  {HigherFloor , Req5} = cowboy_req:qs_val(<<"higherFloor">>, Req4, 5),
-  erlevator_ia:event(reset, [Cause, LowerFloor, HigherFloor]),
-  cowboy_req:reply(200, Req5);
+  {LowerFloorS,  Req4} = cowboy_req:qs_val(<<"lowerFloor">>, Req3, 0),
+  {HigherFloorS, Req5} = cowboy_req:qs_val(<<"higherFloor">>, Req4, 5),
+  {CapacityS,    Req6} = cowboy_req:qs_val(<<"cabinSize">>, Req5, 100),
+
+  try
+    LowerFloor  = binary_to_integer(LowerFloorS),
+    HigherFloor = binary_to_integer(HigherFloorS),
+    Capacity    = binary_to_integer(CapacityS),
+    erlevator_ia:event(reset, [Cause, LowerFloor, HigherFloor, Capacity]),
+    cowboy_req:reply(200, Req6)
+  catch
+    Ex:Term ->
+      io:format("Ouch 'reset/': ~p:~p ~n", [Ex, Term]),
+      cowboy_req:reply(400, Req6)
+  end;
+
+
+
 
 %%
 %% @doc call event

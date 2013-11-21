@@ -33,7 +33,7 @@ start(NbFloor) ->
 -spec(start(integer(), (optimized|omnibus)) -> pid()).
 
 start(NbFloor, Algo) ->
-  Elevator = new_elevator(0, NbFloor, Algo),
+  Elevator = new_elevator(0, NbFloor, 100, Algo),
   Pid = spawn(erlevator_ia, loop, [Elevator]),
   io:format("erlevator_ia#start: Pid: ~p~n", [Pid]),
   register(erlevator_ia, Pid).
@@ -89,10 +89,11 @@ state() ->
 %%
 loop(Elevator) ->
   receive
-    {event, reset, [Cause, LowerFloor, HigherFloor]} ->
-      % io:format("erlevator_ia#loop(reset):{} ~p ~n", [Cause]),
+    {event, reset, [Cause, LowerFloor, HigherFloor, Capacity]} ->
+      io:format("erlevator_ia#loop(reset):{} min: ~p, max:~p, reason: ~p ~n", [LowerFloor, HigherFloor, Cause]),
       NewElevator = new_elevator(LowerFloor,
                                  HigherFloor,
+                                 Capacity,
                                  Elevator#state.algo),
       loop(NewElevator);
 
@@ -146,11 +147,13 @@ loop(Elevator) ->
 %% @see erlevator:start/2
 %%
 %%
-new_elevator(FloorMin, FloorMax, Algo) ->
+new_elevator(FloorMin, FloorMax, Capacity, Algo) ->
   NbFloor = abs(FloorMax - FloorMin) + 1,
-  #state{floor     = 0,
+  #state{floor     = FloorMin,
          floor_min = FloorMin,
          floor_max = FloorMax,
+         capacity  = Capacity,
+         nb_users  = 0,
          direction = +1,
          state     = closed,
          state_to_use = undefined,
@@ -206,10 +209,10 @@ event(Elevator, go, [Destination]) ->
   end;
 
 event(Elevator, user_entered, []) ->
-  Elevator;
+  Elevator#state{nb_users = Elevator#state.nb_users + 1};
 
 event(Elevator, user_exited, []) ->
-  Elevator.
+  Elevator#state{nb_users = Elevator#state.nb_users - 1}.
 
 %%
 %% Reset the Event for the specified Floor
@@ -301,8 +304,7 @@ next_command(Elevator = #state{floor     = Floor,
                                state     = Prev,
                                direction = Dir,
                                algo      = Algo,
-                               floor_events = FloorEvents,
-                               debug     = Debug}) when Algo == optimized ->
+                               floor_events = FloorEvents}) when Algo == optimized ->
   if
     (Prev == opened) ->
       FloorEvent = array:get(Floor, FloorEvents),
@@ -322,7 +324,7 @@ next_command(Elevator = #state{floor     = Floor,
     (Prev == closed) or (Prev == up) or (Prev == down) ->
 
       Result = next_floor(Floor, Min, Max, Dir, FloorEvents, result()),
-      ShouldOpen = should_open_door(Debug, Floor, Dir, FloorEvents, Result),
+      ShouldOpen = should_open_door(Elevator, Result),
 
       % io:format("... [floor:~p] ~p, should open: ~p ~n", [Floor, Result, ShouldOpen]),
       if
@@ -391,27 +393,35 @@ move(Elevator = #state{floor = Floor,
 %% Optimized
 %% ===================================================================
 
-should_open_door(Debug, Floor, Dir, Events, #result{destination  = Destination,
-                                             pass_through = PassThrough}) ->
+should_open_door(#state{floor     = Floor,
+                        capacity  = Capacity,
+                        nb_users  = NbUsers,
+                        direction = Dir,
+                        floor_events = Events,
+                        debug     = Debug},
+                 #result{destination  = Destination,
+                         pass_through = PassThrough}) ->
 
 
+  Event = array:get(Floor, Events),
+  What   = Event#floor_event.what,
+  StateForDir = state_for_direction(Dir),
   Res = if
+          (What == stop) ->
+            true;
+
+          (NbUsers >= Capacity) ->
+            false; % already full
+
           (Destination == undefined) and (PassThrough == Floor) ->
             true;
 
-          true -> % aka else
-
-            Event = array:get(Floor, Events),
-            What  = Event#floor_event.what,
-            StateForDir = state_for_direction(Dir),
-            if
-              (What == stop) or (What == StateForDir) ->
+          (What == StateForDir) ->
                 true;
-
-              true -> % aka else
-                false
-            end
+          true -> % aka else
+            false
         end,
+  %%
   case Debug of
     true ->
       io:format("should_open_door Floor: ~p, Dir:~p, Dst: ~p, Passthrough: ~p ==> ~p ~n", [Floor, Dir, Destination, PassThrough, Res]);
@@ -441,7 +451,7 @@ next_floor(Floor, Min, Max, Dir, Events, Result) ->
         undefined ->
           next_floor(Floor + Dir, Min, Max, Dir, Events, Result);
 
-        Other ->
+        _ ->
           next_floor(Floor + Dir, Min, Max, Dir, Events, Result#result{pass_through = Floor})
 
       end
@@ -450,17 +460,20 @@ next_floor(Floor, Min, Max, Dir, Events, Result) ->
 %% ===================================================================
 %% Dump Events
 %% ===================================================================
+-ifdef(DUMP).
+
 dump_events(#state{floor_max = Max,
                    floor_events = Events}) ->
   io:format("FloorEvents: ["),
   dump_events0(0, Max, Events).
 
-dump_events0(Floor, Max, Events) when (Floor > Max) -> io:format("]~n");
+dump_events0(Floor, Max, _     ) when (Floor > Max) -> io:format("]~n");
 dump_events0(Floor, Max, Events) ->
   #floor_event{what = What} = array:get(Floor, Events),
   io:format("[~p] ~p, ", [Floor, What]),
   dump_events0(Floor + 1, Max, Events).
 
+-endif.
 
 %% ===================================================================
 %% Tests
@@ -470,11 +483,13 @@ dump_events0(Floor, Max, Events) ->
 -include_lib("eunit/include/eunit.hrl").
 
 new_elevator_test() ->
-	IA0 = new_elevator(0, 5, beuark),
+	IA0 = new_elevator(0, 5, 100, beuark),
   IA1 = IA0#state{floor_events = undefined}, %
 	Expected = #state{floor=0,
                     floor_min = 0,
                     floor_max = 5,
+                    nb_users  = 0,
+                    capacity  = 100,
                     direction = +1,
                     state = closed,
                     algo  = beuark,
@@ -484,7 +499,7 @@ new_elevator_test() ->
 	ok.
 
 omnibus_should_change_direction_when_hitting_roof_test() ->
-  IA  = new_elevator(0, 5, omnibus),
+  IA  = new_elevator(0, 5, 100, omnibus),
   IA1 = #state{floor=Floor1} = move(IA), % 1st floor?
   ?assertEqual(1, Floor1),
   IA2 = #state{floor=Floor2} = move(IA1), % 2st floor?
@@ -495,7 +510,7 @@ omnibus_should_change_direction_when_hitting_roof_test() ->
   ?assertEqual(4, Floor4),
   IA5 = #state{floor=Floor5} = move(IA4), % 5st floor?
   ?assertEqual(5, Floor5),
-  IA6 = #state{floor=Floor6} = move(IA5), % 4st floor?
+  #state{floor=Floor6} = move(IA5), % 4st floor?
   ?assertEqual(4, Floor6),
   ok.
 
@@ -622,6 +637,27 @@ optimized_should_move_to_the_called_floor_but_not_stop_when_called_on_the_opposi
     ?assertEqual(closed,  next_command()),
     ?assertEqual(up,      next_command()), % 3th
     ?assertEqual(opened,  next_command()),
+    ok
+  after
+    stop()
+  end.
+
+reset_test() ->
+  try
+    start(5, optimized),
+    debug(),
+    Min = -13,
+    Max =  27,
+    Cap = 45,
+    event(reset, [<<"Ooops">>, Min, Max, Cap]),
+    #state{floor     = Floor,
+           floor_min = FloorMin,
+           floor_max = FloorMax,
+           capacity  = Capacity} = state(),
+    ?assertEqual(Min, Floor),
+    ?assertEqual(Min, FloorMin),
+    ?assertEqual(Max, FloorMax),
+    ?assertEqual(Cap, Capacity),
     ok
   after
     stop()

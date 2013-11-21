@@ -4,6 +4,8 @@
 -record(state, {floor         :: integer(),
                 floor_max     :: integer(),
                 floor_min     :: integer(),
+                capacity      :: integer(),
+                nb_users      :: integer(),
                 direction     :: integer(),
                 state         :: status(),
                 state_to_use  :: extended_status(),
