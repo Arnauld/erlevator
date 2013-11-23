@@ -3,9 +3,10 @@
 % Shared record definiation
 -include("erlevator.hrl").
 
--export([start/1, start/2, loop/1, state/0]).
+-export([start/1, start/2, loop/1, stop/0]).
 -export([next_command/0]).
 -export([event/2]).
+-export([format_state/1, state/0, debug/0]).
 
 
 %% ===================================================================
@@ -43,12 +44,17 @@ start(NbFloor, Algo) ->
 %%
 
 stop() ->
-  whereis(erlevator_ia) ! stop.
+  case whereis(erlevator_ia) of
+    undefined ->
+      io:format("erlevator_ia#stop: no Pid bound~n");
+
+    Pid ->
+      Pid ! stop
+  end.
 
 %%
 %% @doc stop the registered elevator.
 %%
-
 debug() ->
   whereis(erlevator_ia) ! debug.
 
@@ -63,7 +69,6 @@ event(EventType, Details) ->
 
 %%
 %% @doc compute and returns the next command from the registered elevator.
-%%
 %%
 next_command() ->
   whereis(erlevator_ia) ! { next_command, self() },
@@ -90,7 +95,8 @@ state() ->
 loop(Elevator) ->
   receive
     {event, reset, [Cause, LowerFloor, HigherFloor, Capacity]} ->
-      io:format("erlevator_ia#loop(reset):{} min: ~p, max:~p, reason: ~p ~n", [LowerFloor, HigherFloor, Cause]),
+      io:format("erlevator_ia#loop(reset):{} min: ~p, max:~p, reason: ~p ~n",
+                [LowerFloor, HigherFloor, Cause]),
       NewElevator = new_elevator(LowerFloor,
                                  HigherFloor,
                                  Capacity,
@@ -112,7 +118,8 @@ loop(Elevator) ->
                   Other
               end,
       From ! { State },
-      loop(NewElevator);
+      NewElevator1 = tick(NewElevator),
+      loop(NewElevator1);
 
     {state, From} ->
       From ! { Elevator },
@@ -132,7 +139,62 @@ loop(Elevator) ->
       true
   end.
 
+%%
+%%
+%% @private
+%%
+join_events(Array) ->
+  array:foldl(fun(Index, #floor_event{what     = What,
+                                      idle     = Idle,
+                                      nb_users = NbUsers,
+                                      nb_users_last_tick = NbUsersL}, Acc) ->
+                Loc = io_lib:format("    {"
+                                    "\"i\":~w, "
+                                    "\"what\":\"~w\", "
+                                    "\"idle\":~w, "
+                                    "\"nb_users\":~w, "
+                                    "\"nb_users_last_tick\":~w, "
+                                    "}~n",
+                                    [Index, What, Idle, NbUsers, NbUsersL]),
+                if  Index > 0 -> io_lib:format("~s, ~s", [Loc, Acc]);
+                    true      -> Loc
+                end
+              end,
+              undefined,
+              Array).
 
+%%
+%% @doc nextCommand
+%% @private
+%%
+format_state(#state{floor        = Floor,
+                    floor_max    = FloorMax,
+                    floor_min    = FloorMin,
+                    capacity     = Capacity,
+                    nb_users     = NbUsers,
+                    direction    = Direction,
+                    state        = State,
+                    state_to_use = StateToUse,
+                    nb_ticks_opened = NbTicksOpened,
+                    algo         = Algo,
+                    floor_events = Events}) ->
+  io_lib:format("{\"floor\": ~w, ~n"
+                "\"floor_min\":~w, ~n"
+                "\"floor_max\":~w, ~n"
+                "\"direction\": \"~w\", ~n"
+                "\"nb_users\": ~w, ~n"
+                "\"capacity\": ~w, ~n"
+                "\"state\": \"~w\", ~n"
+                "\"state_to_use\": \"~w\", ~n"
+                "\"nb_ticks_opened\": ~w, ~n"
+                "\"algo\" :\"~w\", ~n"
+                "\"events\":[~s]}",
+                [Floor, FloorMin, FloorMax,
+                 Direction,
+                 NbUsers, Capacity,
+                 State, StateToUse,
+                 NbTicksOpened,
+                 Algo, join_events(Events)]).
 
 %% ===================================================================
 %% Internal functions
@@ -168,7 +230,9 @@ new_elevator(FloorMin, FloorMax, Capacity, Algo) ->
 %% @private
 %%
 new_event() -> #floor_event{idle = 0,
-                            what = undefined}.
+                            what = undefined,
+                            nb_users = 0,
+                            nb_users_last_tick = 0}.
 
 %%
 %% @doc Event handle
@@ -211,24 +275,82 @@ event(Elevator, go, [Destination]) ->
   end;
 
 event(Elevator, user_entered, []) ->
-  Elevator#state{nb_users = Elevator#state.nb_users + 1};
+  nb_users_changed(Elevator, +1);
 
 event(Elevator, user_exited, []) ->
-  Elevator#state{nb_users = Elevator#state.nb_users - 1}.
+  nb_users_changed(Elevator, -1).
+
+%%
+%%
+%%
+nb_users_changed(Elevator = #state{floor     = Floor,
+                                   floor_min = FloorMin,
+                                   floor_events = FloorEvents},
+                 Amount) ->
+  % update floor data
+  Index = Floor - FloorMin,
+  Event = array:get(Index, FloorEvents),
+  Updated  = Event#floor_event.nb_users + Amount,
+  NewEvent = Event#floor_event{nb_users=Updated},
+  NewEvents = array:set(Index, NewEvent, FloorEvents),
+
+  % update elevator data
+  Elevator#state{nb_users = Elevator#state.nb_users + Amount,
+                 floor_events = NewEvents}.
+
+%%
+%%
+%%
+tick(Elevator = #state{floor     = Floor,
+                       floor_min = FloorMin,
+                       floor_events = FloorEvents}) ->
+  % update floor data
+  Index    = Floor - FloorMin,
+  Event    = array:get(Index, FloorEvents),
+  NbUsers  = Event#floor_event.nb_users,
+  NewEvent = Event#floor_event{nb_users_last_tick=NbUsers},
+
+  io:format("elevator_ia:tick ~p~n", [NewEvent]),
+  NewEvents = array:set(Index, NewEvent, FloorEvents),
+
+  % update elevator data
+  Elevator#state{floor_events = NewEvents}.
+
+
+%%
+%%
+%%
+has_tick_changed(Elevator = #state{floor     = Floor,
+                       floor_min = FloorMin,
+                       floor_events = FloorEvents}) ->
+  Index    = Floor - FloorMin,
+  Event    = array:get(Index, FloorEvents),
+  NbUsers  = Event#floor_event.nb_users,
+  NbUsersPrev = Event#floor_event.nb_users_last_tick,
+  io:format("has_tick_changed: '~p' <> '~p' ~n", [NbUsers, NbUsersPrev]),
+  not(NbUsers == NbUsersPrev).
 
 %%
 %% Reset the Event for the specified Floor
 %%
 reset_event(Floor, FloorMin, FloorEvents) ->
-    array:set(Floor - FloorMin, new_event(), FloorEvents).
+  Event = new_event(),
+  array:set(Floor - FloorMin, Event, FloorEvents).
+
+reset_event_on_open(Floor, FloorMin, FloorEvents) ->
+  Event  = new_event(),
+  EventN = Event#floor_event{nb_users=-1},
+  array:set(Floor - FloorMin, EventN, FloorEvents).
+
 
 %%
 %%
 %%
 increment_idle(Floor, FloorMin, FloorEvents) ->
-    Event = array:get(Floor - FloorMin, FloorEvents),
-    Idle  = Event#floor_event.idle,
-    array:set(Floor, Event#floor_event{idle = Idle + 1}, FloorEvents).
+  Index    = Floor - FloorMin,
+  Event = array:get(Index, FloorEvents),
+  Idle  = Event#floor_event.idle,
+  array:set(Index, Event#floor_event{idle = Idle + 1}, FloorEvents).
 
 %%
 %%
@@ -243,12 +365,17 @@ state_for_direction(Dir) ->
 %%
 %%
 %%
-
 -record(result, {pass_through, destination}).
 
+%%
+%%
+%%
 result() -> #result{pass_through = undefined,
                     destination = undefined}.
 
+%%
+%%
+%%
 is_result_empty(#result{pass_through = PassThrough,
                         destination  = Destination}) ->
   if
@@ -272,8 +399,9 @@ next_command(Elevator = #state{floor = Floor,
     opened ->
       FloorEvent = array:get(Floor - FloorMin, FloorEvents),
       Idle = FloorEvent#floor_event.idle,
+      TickChanged = has_tick_changed(Elevator),
       if
-        (Floor == 0) and (Idle < 3) ->
+        TickChanged or ((Floor == 0) and (Idle < 3)) ->
            Elevator#state{state = opened,
                           state_to_use = nothing,
                           floor_events = increment_idle(Floor, FloorMin, FloorEvents)};
@@ -312,11 +440,15 @@ next_command(Elevator = #state{floor     = Floor,
     (Prev == opened) ->
       FloorEvent = array:get(Floor - Min, FloorEvents),
       Idle = FloorEvent#floor_event.idle,
+      TickChanged = has_tick_changed(Elevator),
+      NbTicks = Elevator#state.nb_ticks_opened,
+
       if
-        (Floor == 0) and (Idle < 3) ->
-           Elevator#state{state = opened,
-                          state_to_use = nothing,
-                          floor_events = increment_idle(Floor, Min, FloorEvents)};
+        TickChanged or (NbTicks == 0) or ((Floor == 0) and (Idle < 3)) ->
+          Elevator#state{state = opened,
+                         state_to_use = nothing,
+                         nb_ticks_opened = NbTicks + 1,
+                         floor_events = increment_idle(Floor, Min, FloorEvents)};
 
         true -> % aka else
            Elevator#state{state = closed,
@@ -332,9 +464,13 @@ next_command(Elevator = #state{floor     = Floor,
       % io:format("... [floor:~p] ~p, should open: ~p ~n", [Floor, Result, ShouldOpen]),
       if
          ShouldOpen ->
-            Elevator#state{state = opened,
-                           state_to_use = undefined,
-                           floor_events = reset_event(Floor, Min, FloorEvents)};
+           io:format("elevator_ia:next_command: Opening doors..~n"),
+           Elevator0 = Elevator#state{state = opened,
+                                      state_to_use = undefined,
+                                      nb_ticks_opened = 0,
+                                      floor_events = reset_event_on_open(Floor, Min, FloorEvents)},
+           io:format("elevator_ia:next_command: => ~s ..~n", [format_state(Elevator0)]),
+           Elevator0;
 
          true -> % aka else
            case is_result_empty(Result) of
@@ -462,25 +598,6 @@ next_floor(Floor, Min, Max, Dir, Events, Result) ->
   end.
 
 %% ===================================================================
-%% Dump Events
-%% ===================================================================
--ifdef(DUMP).
-
-dump_events(#state{floor_min = Min,
-                   floor_max = Max,
-                   floor_events = Events}) ->
-  io:format("FloorEvents: ["),
-  dump_events0(0, Min, Max, Events).
-
-dump_events0(Floor,   _, Max, _     ) when (Floor > Max) -> io:format("]~n");
-dump_events0(Floor, Min, Max, Events) ->
-  #floor_event{what = What} = array:get(Floor - Min, Events),
-  io:format("[~p] ~p, ", [Floor, What]),
-  dump_events0(Floor + 1, Max, Events).
-
--endif.
-
-%% ===================================================================
 %% Tests
 %% ===================================================================
 
@@ -518,182 +635,5 @@ omnibus_should_change_direction_when_hitting_roof_test() ->
   #state{floor=Floor6} = move(IA5), % 4st floor?
   ?assertEqual(4, Floor6),
   ok.
-
-omnibus_full_test() ->
-  start(5, omnibus),
-  try
-    ?assertEqual(up,      next_command()),
-    ?assertEqual(opened,  next_command()), % 1st floor
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(up,      next_command()),
-    ?assertEqual(opened,  next_command()), % 2nd floor
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(up,      next_command()),
-    ?assertEqual(opened,  next_command()), % 3rd floor
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(up,      next_command()),
-    ?assertEqual(opened,  next_command()), % 4th floor
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(up,      next_command()),
-    ?assertEqual(opened,  next_command()), % 5th floor
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(down,    next_command()),
-    ?assertEqual(opened,  next_command()), % 4th floor
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(down,    next_command()),
-    ?assertEqual(opened,  next_command()), % 3rd floor
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(down,    next_command()),
-    ?assertEqual(opened,  next_command()), % 2nd floor
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(down,    next_command()),
-    ?assertEqual(opened,  next_command()), % 1st floor
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(down,    next_command()),
-    ?assertEqual(opened,  next_command()), % 0st floor
-    ?assertEqual(nothing, next_command()), % idle
-    ?assertEqual(nothing, next_command()), % idle
-    ?assertEqual(nothing, next_command()), % idle
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(up,      next_command()),
-    ok
-  after
-    stop()
-  end.
-
-optimized_should_open_door_when_called_at_the_same_floor_test() ->
-  try
-    start(5, optimized),
-    event(call, [0, up]),
-    ?assertEqual(opened,  next_command()),
-    ok
-  after
-    stop()
-  end.
-
-optimized_should_move_to_the_called_floor_test() ->
-  try
-    start(5, optimized),
-    event(call, [2, down]),
-    ?assertEqual(up,     next_command()), % 1st
-    ?assertEqual(up,     next_command()), % 2nd
-    ?assertEqual(opened, next_command()),
-    ok
-  after
-    stop()
-  end.
-
-optimized_should_move_to_the_called_floor_but_stop_when_called_on_its_way_test() ->
-  try
-    start(5, optimized),
-    event(call, [2, down]),
-    ?assertEqual(up,     next_command()), % 1st
-    event(call, [1, up]),
-    ?assertEqual(opened, next_command()),
-    ?assertEqual(closed, next_command()),
-    ?assertEqual(up,     next_command()), % 2nd
-    ?assertEqual(opened, next_command()),
-    ok
-  after
-    stop()
-  end.
-
-optimized_should_move_to_the_called_floor_but_not_stop_when_called_on_the_opposite_way_test() ->
-  try
-    start(5, optimized),
-    event(call, [2, down]),
-    ?assertEqual(up,      next_command()), % 1st
-    event(call, [1, down]),
-    ?assertEqual(up,      next_command()), % 2nd
-    ?assertEqual(opened,  next_command()),
-    event(go, [0]),
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(down,    next_command()), % 1st
-    ?assertEqual(opened,  next_command()),
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(down,    next_command()), % ground
-    ?assertEqual(opened,  next_command()),
-    ?assertEqual(nothing, next_command()), % idle 3 times
-    ok
-  after
-    stop()
-  end.
-
-
-optimized_should_move_to_the_called_floor_but_not_stop_when_called_on_the_opposite_way_2_test() ->
-  try
-    start(5, optimized),
-    debug(),
-    event(call, [5, down]),
-    ?assertEqual(up,      next_command()), % 1st
-    ?assertEqual(up,      next_command()), % 2nd
-    ?assertEqual(up,      next_command()), % 3rd
-    ?assertEqual(up,      next_command()), % 4th
-    ?assertEqual(up,      next_command()), % 5th
-    ?assertEqual(opened,  next_command()),
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(nothing, next_command()), % idle
-    event(call, [3, up]),
-    event(call, [2, up]),
-    ?assertEqual(down,    next_command()), % 4th
-    ?assertEqual(down,    next_command()), % 3rd
-    ?assertEqual(down,    next_command()), % 2nd
-    ?assertEqual(opened,  next_command()),
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(up,      next_command()), % 3th
-    ?assertEqual(opened,  next_command()),
-    ok
-  after
-    stop()
-  end.
-
-reset_test() ->
-  try
-    start(5, optimized),
-    debug(),
-    Min = -13,
-    Max =  27,
-    Cap = 45,
-    event(reset, [<<"Ooops">>, Min, Max, Cap]),
-    #state{floor     = Floor,
-           floor_min = FloorMin,
-           floor_max = FloorMax,
-           capacity  = Capacity} = state(),
-    ?assertEqual(Min, Floor),
-    ?assertEqual(Min, FloorMin),
-    ?assertEqual(Max, FloorMax),
-    ?assertEqual(Cap, Capacity),
-    ok
-  after
-    stop()
-  end.
-
-negative_floors_test() ->
-  try
-    Min = -13,
-    Max = 27,
-    Cap = 45,
-    start(5, optimized),
-    event(reset, [<<"Ooops">>, Min, Max, Cap]),
-    debug(),
-    event(call, [-7, down]),
-    ?assertEqual(up,      next_command()), % -12
-    ?assertEqual(up,      next_command()), % -11
-    ?assertEqual(up,      next_command()), % -10
-    ?assertEqual(up,      next_command()), % -9
-    ?assertEqual(up,      next_command()), % -8
-    ?assertEqual(up,      next_command()), % -7
-    ?assertEqual(opened,  next_command()),
-    ?assertEqual(closed,  next_command()),
-    ?assertEqual(nothing, next_command()), % idle
-    event(go, [-5]),
-    ?assertEqual(up,      next_command()), % -6
-    ?assertEqual(up,      next_command()), % -5
-    ?assertEqual(opened,  next_command()),
-    ?assertEqual(closed,  next_command()),
-    ok
-  after
-    stop()
-  end.
 
 -endif.

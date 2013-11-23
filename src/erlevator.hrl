@@ -9,9 +9,12 @@
                 direction     :: integer(),
                 state         :: status(),
                 state_to_use  :: extended_status(),
+                nb_ticks_opened :: integer(),
                 algo          :: term(),
                 floor_events,
                 debug         :: boolean()}).
 
 -record(floor_event, {what,
-                      idle    :: (undefined | integer())}).
+                      idle    :: (undefined | integer()),
+                      nb_users :: integer(),
+                      nb_users_last_tick :: integer()}).

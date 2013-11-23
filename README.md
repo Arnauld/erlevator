@@ -26,7 +26,7 @@ Deploy on Heroku
 
 Check logs
 
-    heroku logs
+    heroku logs --tail
 
 Remote bash
 

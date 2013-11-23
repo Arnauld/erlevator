@@ -41,42 +41,13 @@ terminate(_Reason, _Req, _State) ->
 %% Handle functions
 %% ===================================================================
 
-join_events(Array) ->
-  array:foldl(fun(Index, #floor_event{what = What, idle = Idle}, Acc) ->
-                Loc = io_lib:format("{\"i\":~w, \"what\":\"~w\", \"idle\":~w}",
-                                    [Index, What, Idle]),
-                if  Index > 0 -> io_lib:format("~s, ~s", [Loc, Acc]);
-                    true      -> Loc
-                end
-              end,
-              undefined,
-              Array).
-
 %%
 %% @doc nextCommand
 %% @private
 %%
 handle0(<<"GET">>, <<"/status">>, Req2) ->
-  #state{floor        = Floor,
-         floor_max    = FloorMax,
-         floor_min    = FloorMin,
-         capacity     = Capacity,
-         nb_users     = NbUsers,
-         direction    = Direction,
-         state        = State,
-         state_to_use = StateToUse,
-         algo         = Algo,
-         floor_events = Events} = erlevator_ia:state(),
-  Body  = io_lib:format("{\"floor\": ~w, \"floor_min\":~w, \"floor_max\":~w, "
-                        "\"direction\": \"~w\", "
-                        "\"nb_users\": ~w, \"capacity\": ~w, "
-                        "\"state\": \"~w\", "
-                        "\"state-to_use\": \"~w\", "
-                        "\"algo\" :\"~w\", \"events\":[~s]}", [Floor, FloorMin, FloorMax,
-                                                      Direction,
-                                                      NbUsers, Capacity,
-                                                      State, StateToUse,
-                                                      Algo, join_events(Events)]),
+  State = erlevator_ia:state(),
+  Body = erlevator_ia:format_state(State),
   cowboy_req:reply(200, [{<<"content-type">>, <<"text/plain">>},
                          {<<"content-encoding">>, <<"utf-8">>}], Body, Req2);
 
