@@ -57,9 +57,14 @@ handle0(<<"GET">>, <<"/status">>, Req2) ->
 %% @private
 %%
 handle0(<<"GET">>, <<"/nextCommand">>, Req2) ->
-  NewCmd = erlevator_ia:next_command(),
-  Body = command_to_body(NewCmd),
-  cowboy_req:reply(200, [], Body, Req2);
+  case erlevator_ia:next_command() of
+    ouch ->
+      cowboy_req:reply(500, [], <<"ouch">>, Req2);
+
+    NewCmd ->
+      Body = command_to_body(NewCmd),
+      cowboy_req:reply(200, [], Body, Req2)
+  end;
 
 %%
 %% @doc reset event
@@ -83,7 +88,13 @@ handle0(<<"GET">>, <<"/reset">>, Req2) ->
       cowboy_req:reply(400, Req6)
   end;
 
-
+%%
+%% @doc reset event
+%% @private
+%%
+handle0(<<"GET">>, <<"/ouch">>, Req2) ->
+  erlevator_ia:event(ouch, []),
+  cowboy_req:reply(200, Req2);
 
 
 %%

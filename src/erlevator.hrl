@@ -12,7 +12,8 @@
                 nb_ticks_opened :: integer(),
                 algo          :: term(),
                 floor_events,
-                debug         :: boolean()}).
+                debug         :: boolean(),
+                ouch}).
 
 -record(floor_event, {what,
                       idle    :: (undefined | integer()),

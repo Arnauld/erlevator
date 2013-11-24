@@ -103,23 +103,39 @@ loop(Elevator) ->
                                  Elevator#state.algo),
       loop(NewElevator);
 
+    {event, ouch, _} ->
+      NewElevator0 = new_elevator(Elevator#state.floor_min,
+                                 Elevator#state.floor_max,
+                                 Elevator#state.capacity,
+                                 Elevator#state.algo),
+      NewElevator1 = NewElevator0#state{ouch = ouch},
+      loop(NewElevator1);
+
     {event, EventType, Details} ->
       % io:format("erlevator_ia#loop(event): ~p, ~p, state: ~p~n", [EventType, Details, Elevator]),
       NewElevator = event(Elevator, EventType, Details),
       loop(NewElevator);
 
     {next_command, From} ->
-      NewElevator = next_command(Elevator),
-      % io:format("erlevator_ia#loop(next_command): ~p~n", [NewElevator]),
-      State = case NewElevator#state.state_to_use of
-                undefined ->
-                  NewElevator#state.state;
-                Other ->
-                  Other
-              end,
-      From ! { State },
-      NewElevator1 = tick(NewElevator),
-      loop(NewElevator1);
+      case Elevator#state.ouch of
+        ouch ->
+          From ! { ouch },
+          loop(Elevator);
+
+        _ ->
+
+          NewElevator = next_command(Elevator),
+          % io:format("erlevator_ia#loop(next_command): ~p~n", [NewElevator]),
+          State = case NewElevator#state.state_to_use of
+                    undefined ->
+                      NewElevator#state.state;
+                    Other ->
+                      Other
+                  end,
+          From ! { State },
+          NewElevator1 = tick(NewElevator),
+          loop(NewElevator1)
+      end;
 
     {state, From} ->
       From ! { Elevator },
@@ -153,7 +169,7 @@ join_events(Array) ->
                                     "\"what\":\"~w\", "
                                     "\"idle\":~w, "
                                     "\"nb_users\":~w, "
-                                    "\"nb_users_last_tick\":~w, "
+                                    "\"nb_users_last_tick\":~w "
                                     "}~n",
                                     [Index, What, Idle, NbUsers, NbUsersL]),
                 if  Index > 0 -> io_lib:format("~s, ~s", [Loc, Acc]);
@@ -186,7 +202,7 @@ format_state(#state{floor        = Floor,
                 "\"capacity\": ~w, ~n"
                 "\"state\": \"~w\", ~n"
                 "\"state_to_use\": \"~w\", ~n"
-                "\"nb_ticks_opened\": ~w, ~n"
+                "\"nb_ticks_opened\": \"~w\", ~n"
                 "\"algo\" :\"~w\", ~n"
                 "\"events\":[~s]}",
                 [Floor, FloorMin, FloorMax,
@@ -386,44 +402,6 @@ is_result_empty(#result{pass_through = PassThrough,
       false
   end.
 
-%% ===================================================================
-%% next_command/1 when Omnibus
-%% ===================================================================
-
-next_command(Elevator = #state{floor = Floor,
-                               floor_min = FloorMin,
-                               state = Prev,
-                               algo  = Algo,
-                               floor_events = FloorEvents}) when Algo == omnibus ->
-  case Prev of
-    opened ->
-      FloorEvent = array:get(Floor - FloorMin, FloorEvents),
-      Idle = FloorEvent#floor_event.idle,
-      TickChanged = has_tick_changed(Elevator),
-      if
-        TickChanged or ((Floor == 0) and (Idle < 3)) ->
-           Elevator#state{state = opened,
-                          state_to_use = nothing,
-                          floor_events = increment_idle(Floor, FloorMin, FloorEvents)};
-
-        true -> % aka else
-           Elevator#state{state = closed,
-                          state_to_use = undefined,
-                          floor_events = reset_event(Floor, FloorMin, FloorEvents)}
-      end;
-
-    closed ->
-      move(Elevator);
-
-    nothing ->
-      Elevator;
-
-    up ->
-      Elevator#state{state = opened};
-
-    down ->
-      Elevator#state{state = opened}
-  end;
 
 %% ===================================================================
 %% next_command/1 when Optimized
@@ -435,7 +413,7 @@ next_command(Elevator = #state{floor     = Floor,
                                state     = Prev,
                                direction = Dir,
                                algo      = Algo,
-                               floor_events = FloorEvents}) when Algo == optimized ->
+                               floor_events = FloorEvents}) ->
   if
     (Prev == opened) ->
       FloorEvent = array:get(Floor - Min, FloorEvents),
@@ -499,34 +477,6 @@ next_command(Elevator = #state{floor     = Floor,
       end
   end.
 
-%%
-%%
-%%
-move(Elevator = #state{floor = Floor,
-                       floor_min = FloorMin,
-                       floor_max = FloorMax,
-                       direction = Dir,
-                       algo      = Algo,
-                       debug     = Debug}) when Algo == omnibus ->
-  NextFloor = Floor + Dir,
-  NewState  = if
-                (NextFloor > FloorMax) or (NextFloor < FloorMin) ->
-                  NewDir = -Dir,
-                  AdjustedFloor = Floor + NewDir,
-                  NewElevator = state_for_direction(NewDir),
-                  Elevator#state{floor=AdjustedFloor, direction=NewDir, state=NewElevator};
-
-                true -> % aka else
-                  NewElevator = state_for_direction(Dir),
-                  Elevator#state{floor=NextFloor, state=NewElevator}
-              end,
-  case Debug of
-    true ->
-      io:format("move Floor: ~p, Dir:~p -> NewState: ~p ~n", [Floor, Dir, NewState]);
-    _ ->
-       ok
-  end,
-  NewState.
 
 %% ===================================================================
 %% Optimized
@@ -605,13 +555,13 @@ next_floor(Floor, Min, Max, Dir, Events, Result) ->
 -include_lib("eunit/include/eunit.hrl").
 
 new_elevator_test() ->
-	IA0 = new_elevator(0, 5, 100, beuark),
+	IA0 = new_elevator(-5, 5, 100, beuark),
   IA1 = IA0#state{floor_events = undefined}, %
-	Expected = #state{floor=0,
-                    floor_min = 0,
-                    floor_max = 5,
-                    nb_users  = 0,
-                    capacity  = 100,
+	Expected = #state{floor=-5,
+                    floor_min = -5,
+                    floor_max =  5,
+                    nb_users  =  0,
+                    capacity  =  100,
                     direction = +1,
                     state = closed,
                     algo  = beuark,
@@ -619,21 +569,5 @@ new_elevator_test() ->
                     debug = false},
 	?assertEqual(Expected, IA1),
 	ok.
-
-omnibus_should_change_direction_when_hitting_roof_test() ->
-  IA  = new_elevator(0, 5, 100, omnibus),
-  IA1 = #state{floor=Floor1} = move(IA), % 1st floor?
-  ?assertEqual(1, Floor1),
-  IA2 = #state{floor=Floor2} = move(IA1), % 2st floor?
-  ?assertEqual(2, Floor2),
-  IA3 = #state{floor=Floor3} = move(IA2), % 3st floor?
-  ?assertEqual(3, Floor3),
-  IA4 = #state{floor=Floor4} = move(IA3), % 4st floor?
-  ?assertEqual(4, Floor4),
-  IA5 = #state{floor=Floor5} = move(IA4), % 5st floor?
-  ?assertEqual(5, Floor5),
-  #state{floor=Floor6} = move(IA5), % 4st floor?
-  ?assertEqual(4, Floor6),
-  ok.
 
 -endif.
