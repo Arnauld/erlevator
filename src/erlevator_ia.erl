@@ -561,7 +561,7 @@ next_floor(Floor, Min, Max, Dir, Events, Result) ->
 new_elevator_test() ->
 	IA0 = new_elevator(-5, 5, 100, beuark),
   IA1 = IA0#state{floor_events = undefined}, %
-	Expected = #state{floor=-5,
+	Expected = #state{floor     =  0,
                     floor_min = -5,
                     floor_max =  5,
                     nb_users  =  0,

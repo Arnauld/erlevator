@@ -359,8 +359,6 @@ negative_floors__3_test() ->
     debug(),
 
     event(call, [ 1, up]),
-    ?assertEqual(up,      next_command()), % -1
-    ?assertEqual(up,      next_command()), %  0
     ?assertEqual(up,      next_command()), %  1
     ?assertEqual(opened,  next_command()),
     io:format("~~ state: ~s ~n", [format_state(state())]),
