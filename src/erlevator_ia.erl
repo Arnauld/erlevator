@@ -257,6 +257,7 @@ new_event() -> #floor_event{idle = 0,
 event(Elevator, call, [AtFloor, Direction]) ->
   FloorMin    = Elevator#state.floor_min,
   FloorEvents = Elevator#state.floor_events,
+  io:format("erlevator_ia:event : call ~p <? ~p", [FloorMin, AtFloor]),
   FloorEvent  = array:get(AtFloor - FloorMin, FloorEvents),
   case FloorEvent#floor_event.what of
     stop -> % whatever the direction one already stops there :)
