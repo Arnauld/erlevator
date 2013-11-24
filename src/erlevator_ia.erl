@@ -105,9 +105,9 @@ loop(Elevator) ->
 
     {event, ouch, _} ->
       NewElevator0 = new_elevator(Elevator#state.floor_min,
-                                 Elevator#state.floor_max,
-                                 Elevator#state.capacity,
-                                 Elevator#state.algo),
+                                  Elevator#state.floor_max,
+                                  Elevator#state.capacity,
+                                  Elevator#state.algo),
       NewElevator1 = NewElevator0#state{ouch = ouch},
       loop(NewElevator1);
 
@@ -227,7 +227,7 @@ format_state(#state{floor        = Floor,
 %%
 new_elevator(FloorMin, FloorMax, Capacity, Algo) ->
   NbFloor = abs(FloorMax - FloorMin) + 1,
-  #state{floor     = FloorMin,
+  #state{floor     = 0,
          floor_min = FloorMin,
          floor_max = FloorMax,
          capacity  = Capacity,
@@ -255,7 +255,7 @@ new_event() -> #floor_event{idle = 0,
 %% @private
 %%
 event(Elevator, call, [AtFloor, Direction]) ->
-  FloorMin = Elevator#state.floor_min,
+  FloorMin    = Elevator#state.floor_min,
   FloorEvents = Elevator#state.floor_events,
   FloorEvent  = array:get(AtFloor - FloorMin, FloorEvents),
   case FloorEvent#floor_event.what of
@@ -523,14 +523,18 @@ should_open_door(#state{floor     = Floor,
 
 
 next_floor(Floor, Min, Max, Dir, Events, Result) ->
+  io:format("erlevator_ia:next_floor: (~p < ~p < ~p) ~n", [Min, Floor, Max]),
+
   if
     (Floor > Max) or (Floor < Min) ->
+      io:format("erlevator_ia:next_floor: out of range"),
       Result;
 
     true -> % aka else
       Event = array:get(Floor - Min, Events),
       What  = Event#floor_event.what,
       StateForDir = state_for_direction(Dir),
+      io:format("erlevator_ia:next_floor: what:  ~p, state for dir: ~p ~n", [What, StateForDir]),
       case What of
         stop ->
           Result#result{destination = Floor};

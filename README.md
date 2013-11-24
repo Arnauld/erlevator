@@ -41,6 +41,13 @@ Remote bash
     http://elevator.retour1024.eu.cloudbees.net
 
 
+#
+
+    Replace: ^.*app\[web\.1\]:.*\n
+    By: ''
+
+    ^.*heroku\[router\]:.*path=([^ ]*) host(.*)$
+
 # Links
 
 * [cowboy](https://github.com/extend/cowboy): Small, fast, modular HTTP server written in Erlang

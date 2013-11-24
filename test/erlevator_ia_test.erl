@@ -374,7 +374,9 @@ negative_floors__3_test() ->
     ?assertEqual(up,      next_command()), %  2
     ?assertEqual(opened,  next_command()),
     ?assertEqual(nothing, next_command()),
-    ?assertEqual(nothing, next_command()),
+    event(call, [ 1, up]),
+    ?assertEqual(closed, next_command()),
+    ?assertEqual(down,   next_command()),
     ok
   after
     stop()
