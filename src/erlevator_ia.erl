@@ -271,7 +271,7 @@ event(Elevator, call, [AtFloor, Direction]) ->
       Elevator#state{floor_events = NewEvents};
 
     _ -> % the other direction is already tracked
-      NewEvent    = FloorEvent#floor_event{what=stop},
+      NewEvent    = FloorEvent#floor_event{what=both},
       NewEvents   = array:set(AtFloor - FloorMin, NewEvent, FloorEvents),
       Elevator#state{floor_events = NewEvents}
   end;
@@ -420,9 +420,13 @@ next_command(Elevator = #state{floor     = Floor,
       Idle = FloorEvent#floor_event.idle,
       TickChanged = has_tick_changed(Elevator),
       NbTicks = Elevator#state.nb_ticks_opened,
+      NbUsers  = Elevator#state.nb_users,
+      Capacity = Elevator#state.capacity,
 
       if
-        TickChanged or (NbTicks == 0) or ((Floor == 0) and (Idle < 3)) ->
+        (NbUsers < Capacity) and (   TickChanged
+                                  or (NbTicks == 0)
+                                  or ((Floor == 0) and (Idle < 3))) ->
           Elevator#state{state = opened,
                          state_to_use = nothing,
                          nb_ticks_opened = NbTicks + 1,
@@ -506,8 +510,9 @@ should_open_door(#state{floor     = Floor,
           (Destination == undefined) and (PassThrough == Floor) ->
             true;
 
-          (What == StateForDir) ->
+          (What == StateForDir) or (What == both) ->
                 true;
+
           true -> % aka else
             false
         end,
