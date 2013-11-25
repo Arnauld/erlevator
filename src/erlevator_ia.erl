@@ -520,7 +520,8 @@ should_open_door(#state{floor     = Floor,
   %%
   case Debug of
     true ->
-      io:format("should_open_door Floor: ~p, Dir:~p, Dst: ~p, Passthrough: ~p ==> ~p ~n", [Floor, Dir, Destination, PassThrough, Res]);
+      io:format("should_open_door Floor: ~p, Dir:~p, Dst: ~p, Passthrough: ~p ==> ~p ~n",
+                [Floor, Dir, Destination, PassThrough, Res]);
     _ ->
        ok
   end,
